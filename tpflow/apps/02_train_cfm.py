@@ -1,13 +1,10 @@
 import logging
-from os.path import join
 
-import h5py
 import hydra
 import jax
 import jax.numpy as jnp
 import jax.random as jrd
 import numpy as np
-import zarr
 from flanch import Recorder, get_optimizer
 from flanch.optimizer import get_train_step
 from flax import nnx
