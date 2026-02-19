@@ -52,8 +52,8 @@ def batch_prep(batch):
 @hydra.main(version_base=None, config_name='cfm', config_path='../../conf')
 @log_duration()
 def main(cfg: CFMTraining) -> None:
-  logging.info("\n%s", OmegaConf.to_yaml(cfg))
   with init_wandb(cfg, 'cfm-train') as run:
+    logging.info("\n%s", OmegaConf.to_yaml(cfg))
     rngs = nnx.Rngs(0)
     model = get_model(cfg, rngs=rngs)
     data = get_data(cfg.data)
