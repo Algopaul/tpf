@@ -1,0 +1,3 @@
+[submodule "conf/env"]
+	path = conf/env
+	url = git@github.com:Algopaul/slurmenvs
