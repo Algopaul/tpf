@@ -1,8 +1,12 @@
 """Generate raw trajectories for dataset gaurot of rotating Gaussians"""
+import os
+from pathlib import Path
+
 import jax.numpy as jnp
 import jax.random as jrd
 import numpy as np
 import zarr
+from hdfv.histogram_videos import histogram_video
 
 
 def gaussians(
@@ -34,8 +38,8 @@ def trajectory(seed, n_samples, n_timepoints):
 
 
 def main():
-  n_timepoints = 30
-  n_samples = {'train': 200_000, 'test': 20_000}
+  n_timepoints = 60
+  n_samples = {'train': 1_000_000, 'test': 20_000}
   for i, (k, v) in enumerate(n_samples.items()):
     root = zarr.create_group(
         f'data/datasets/gaurot/raw_trajectories/{k}.zarr',
@@ -46,6 +50,9 @@ def main():
     root.create_array("time", data=np.linspace(0, 1, n_timepoints))
     root.create_array(name='param', data=1.0 * np.ones(v))
     traj = trajectory(jrd.key(i), v, n_timepoints)
+    vidfile = Path(f'data/plots/rotating_gaussians/{k}.mp4')
+    vidfile.parent.mkdir(parents=True, exist_ok=True)
+    histogram_video(np.transpose(traj, [1, 0, 2]), vidfile, vmax=100)
     data[:] = np.array(traj)
 
 
