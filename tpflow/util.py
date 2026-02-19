@@ -1,11 +1,19 @@
 import functools
 import logging
+import os
 import time
 
 import humanize
+from omegaconf import OmegaConf
+
+import wandb
 
 
-def log_duration(label: str = None, *, minimum_unit: str = "microseconds"):
+def log_duration(
+    label: str | None = None,
+    *,
+    minimum_unit: str = "microseconds",
+):
   """
     Decorator that logs how long a function takes.
     
@@ -30,3 +38,18 @@ def log_duration(label: str = None, *, minimum_unit: str = "microseconds"):
     return wrapper
 
   return decorator
+
+
+def init_wandb(cfg, job_type):
+  config_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
+  config_dict["slurm_id"] = os.environ.get("SLURM_JOB_ID")  # pyright: ignore
+  jobname = cfg.wandb.jobname or job_type + '_' + cfg.data.name
+  group = cfg.wandb.group or cfg.data.name
+  return wandb.init(
+      name=jobname,
+      project='two-parameter-flow',
+      group=group,
+      job_type=job_type,
+      config=config_dict,  # pyright: ignore
+      mode=cfg.wandb.mode,
+  )

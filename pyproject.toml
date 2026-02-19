@@ -2,7 +2,7 @@
 name = "tpflow"
 description = ""
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 version = "0.1.0"
 
 dependencies = [
@@ -15,6 +15,12 @@ dependencies = [
   "humanize",
   "pandas",
   "seaborn",
+  "wandb[media] (>=0.24.2,<0.25.0)",
+  "zarr (>=3.1.5,<4.0.0)",
+  "rich (>=14.3.2,<15.0.0)",
+  "typer (>=0.21.1,<0.22.0)",
+  "hdfv @ git+ssh://git@github.com/Algopaul/hdfv.git",
+  "flanch @ git+ssh://git@github.com/Algopaul/flanch.git",
 ]
 
 [project.optional-dependencies]

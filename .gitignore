@@ -21,7 +21,7 @@ poetry.lock
 
 # Other
 *.DS_Store
-config/
+# config/
 
 # PyCharm
 .idea
@@ -30,3 +30,4 @@ config/
 data/
 outputs/
 multirun/
+wandb/
