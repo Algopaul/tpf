@@ -16,7 +16,7 @@ import wandb
 from tpflow.config import CFMTraining
 from tpflow.data import get_data
 from tpflow.model import flow_inference, get_model
-from tpflow.util import init_wandb, log_duration
+from tpflow.util import init_wandb, log_duration, trajectory_video_numpy
 
 
 def velo_err_pure(model, batch):
@@ -91,6 +91,10 @@ def main(cfg: CFMTraining) -> None:
           video = np.transpose(frames, (0, 3, 1, 2))
           video = wandb.Video(video, fps=30, format='mp4')
           run.log({"train/histogram_video": video}, step=epoch + 1)
+          frames = trajectory_video_numpy(out[:, :200, :])
+          video = np.transpose(frames, (0, 3, 1, 2))
+          video = wandb.Video(video, fps=20, format='mp4')
+          run.log({"train/trajectories": video}, step=epoch + 1)
 
 
 if __name__ == "__main__":
