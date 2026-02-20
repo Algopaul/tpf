@@ -107,6 +107,7 @@ def trajectory_video_numpy(
 
     # Clip for display
     img = np.clip(frame, 0, 1)
-    out_data.append(img)
+    rgb = (255 * img).astype(np.uint8)
+    out_data.append(rgb)
 
   return out_data
