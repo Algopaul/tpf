@@ -56,7 +56,7 @@ def main():
   time = jnp.linspace(0, 1, n_timepoints)
   rotation_speed_fn = lambda t: t / 4 + 0.2
   merging_schedule = lambda t: 5.0 - 5 * t
-  n_samples = {'train': 200, 'test': 10}
+  n_samples = {'train': 3_000, 'test': 128}
   for k, v in n_samples.items():
     root = zarr.create_group(
         f'data/datasets/imgrot/raw_trajectories/{k}.zarr',
