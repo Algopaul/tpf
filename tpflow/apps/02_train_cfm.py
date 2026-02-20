@@ -84,7 +84,7 @@ def main(cfg: CFMTraining) -> None:
         out = flow_inference(
             model,
             jrd.normal(jrd.key(0), (20_000, 2)),
-            jnp.linspace(0, 1, 32),
+            jnp.linspace(0, 1, 96),
         )
         if cfg.data.type == 'hist':
           frames = histogram_frames(out)
