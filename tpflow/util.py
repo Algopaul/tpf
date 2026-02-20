@@ -44,8 +44,9 @@ def log_duration(
 
 def init_wandb(cfg, job_type):
   config_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
-  config_dict["slurm_id"] = os.environ.get("SLURM_JOB_ID")  # pyright: ignore
-  jobname = cfg.wandb.jobname or job_type + '_' + cfg.data.name
+  sid = os.environ.get("SLURM_JOB_ID")
+  config_dict["slurm_id"] = sid  # pyright: ignore
+  jobname = cfg.wandb.jobname or job_type + '_' + cfg.data.name + '_' + sid
   group = cfg.wandb.group or cfg.data.name
   return wandb.init(
       name=jobname,
