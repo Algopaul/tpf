@@ -14,3 +14,6 @@ gaurot-cfm:
     opt.learning_rate=1e-4 \
     inference.n_samples=20_000 \
 
+imgrot-data:
+  {{py}} ./scripts/datagen/rotating_gaussians.py
+  {{py}} ./tpflow/apps/01_process_trajectories.py block_size=256
