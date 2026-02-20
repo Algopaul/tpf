@@ -30,12 +30,20 @@ class TrajectoryProcessing:
 
 
 @dataclass
+class InferenceConfig:
+  n_samples: int = 256
+  n_sampling_steps: int = 128
+  n_param_steps: int = 64
+
+
+@dataclass
 class CFMTraining:
   model_type: str = 'mlp'
   mlp: MLPConfig = field(default_factory=MLPConfig)
   opt: OptimizerConfig = field(default_factory=OptimizerConfig)
   data: DataConfig = field(default_factory=DataConfig)
   wandb: WandbConfig = field(default_factory=WandbConfig)
+  inference: InferenceConfig = field(default_factory=InferenceConfig)
   eval_interval: int = 50
 
 
