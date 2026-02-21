@@ -87,10 +87,11 @@ def main(cfg: CFMTraining) -> None:
       avg_metric.reset()
 
       if (epoch + 1) % cfg.eval_interval == 0:
+        sample_shape = batch['data'].shape[1:]
         model.eval()
         out = flow_inference(
             model,
-            jrd.normal(jrd.key(0), (cfg.inference.n_samples, 2)),
+            jrd.normal(jrd.key(0), (cfg.inference.n_samples, sample_shape)),
             jnp.linspace(0, 1, cfg.inference.n_param_steps),
             n_steps=cfg.inference.n_param_steps,
         )
