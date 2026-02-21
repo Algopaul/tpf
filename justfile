@@ -15,5 +15,5 @@ gaurot-cfm:
     inference.n_samples=20_000 \
 
 imgrot-data:
-  {{py}} ./scripts/datagen/rotating_gaussians.py
+  {{py}} ./scripts/datagen/rotation_image.py
   {{py}} ./tpflow/apps/01_process_trajectories.py block_size=256 data.name=imgrot
