@@ -6,6 +6,7 @@ import hydra
 import numpy as np
 import zarr
 from flanch.trajectories import flatten_trajectories
+from hdfx.shuffle import zarrshuffle
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
@@ -62,6 +63,10 @@ def main(cfg: TrajectoryProcessing) -> None:
         get_array(outfile, 'data')[sample_start:sample_end] = flat_data
         get_array(outfile, 'time')[sample_start:sample_end] = flat_time
         get_array(outfile, 'param')[sample_start:sample_end] = flat_param
+
+      if split == 'train':
+        shuffled_out = join(basedir, 'cfm_train_data', 'train_shuffled.zarr')
+        zarrshuffle(out_filename, shuffled_out, cfg.data.shuffle_block_size, 0)
 
 
 def make_outfile(name, n_samples, block_size, n_time, sample_shape):

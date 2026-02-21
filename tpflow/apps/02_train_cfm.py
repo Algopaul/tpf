@@ -91,7 +91,7 @@ def main(cfg: CFMTraining) -> None:
         model.eval()
         out = flow_inference(
             model,
-            jrd.normal(jrd.key(0), (cfg.inference.n_samples, sample_shape)),
+            jrd.normal(jrd.key(0), (cfg.inference.n_samples, *sample_shape)),
             jnp.linspace(0, 1, cfg.inference.n_param_steps),
             n_steps=cfg.inference.n_param_steps,
         )
