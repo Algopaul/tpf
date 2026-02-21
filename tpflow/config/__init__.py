@@ -55,7 +55,7 @@ cs.store(
     name='imgrot',
     node=CFMTraining(
         model_type='unet',
-        unet=UNetConfig(channels_inout=1),
+        unet=UNetConfig(channels_inout=1, use_attn=tuple(4 * [False])),
         opt=OptimizerConfig(learning_rate=1e-4),
         data=DataConfig(
             'imgrot', type='field', batch_size=64, shuffle_block_size=10),
