@@ -27,7 +27,7 @@ def get_data(cfg: DataConfig):
   n_batches = None
 
   for field in cfg.fields:
-    d = block_shuffle(np.array(file[field]), 1_000, 0)
+    d = block_shuffle(np.array(file[field]), cfg.shuffle_block_size, 0)
     batches = len(d) // cfg.batch_size
 
     if n_batches is None:

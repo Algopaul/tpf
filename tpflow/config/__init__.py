@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from flanch.config import MLPConfig, OptimizerConfig
+from flanch.config import MLPConfig, OptimizerConfig, UNetConfig
 from hydra.core.config_store import ConfigStore
 
 
@@ -9,8 +9,8 @@ class DataConfig:
   name: str = 'gaurot'
   type: str = 'hist'
   batch_size: int = 100_000
+  shuffle_block_size: int = 1_000
   fields: tuple = ('data', 'time')
-  gen_size: int = 100_000
 
 
 @dataclass
@@ -40,6 +40,7 @@ class InferenceConfig:
 class CFMTraining:
   model_type: str = 'mlp'
   mlp: MLPConfig = field(default_factory=MLPConfig)
+  unet: UNetConfig = field(default_factory=UNetConfig)
   opt: OptimizerConfig = field(default_factory=OptimizerConfig)
   data: DataConfig = field(default_factory=DataConfig)
   wandb: WandbConfig = field(default_factory=WandbConfig)
@@ -50,3 +51,13 @@ class CFMTraining:
 cs = ConfigStore.instance()
 cs.store(name='config', node=TrajectoryProcessing)
 cs.store(name='cfm', node=CFMTraining)
+cs.store(
+    name='imgrot',
+    node=CFMTraining(
+        model_type='unet',
+        unet=UNetConfig(channels_inout=1),
+        opt=OptimizerConfig(learning_rate=1e-4),
+        data=DataConfig(
+            'imgrot', type='field', batch_size=64, shuffle_block_size=10),
+    ),
+)

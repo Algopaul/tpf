@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 import numpy as np
-from flanch.model import EmbMLP
+from flanch.model import EmbMLP, UNet
 from flax import nnx
 from tqdm import tqdm
 
@@ -71,5 +71,7 @@ def get_model(cfg: CFMTraining, rngs=None):
   match cfg.model_type:
     case 'mlp':
       return CFMDec(EmbMLP.from_config(cfg.mlp, rngs=rngs))
+    case 'unet':
+      return UNet.from_config(cfg.unet, rngs=rngs)
     case _:
       raise ValueError('model_type not supported')

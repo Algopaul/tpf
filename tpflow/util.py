@@ -46,7 +46,7 @@ def init_wandb(cfg, job_type):
   config_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
   sid = os.environ.get("SLURM_JOB_ID")
   config_dict["slurm_id"] = sid  # pyright: ignore
-  jobname = cfg.wandb.jobname or job_type + '_' + cfg.data.name + '_' + sid
+  jobname = cfg.wandb.jobname or job_type + '_' + cfg.data.name + '_' + str(sid)
   group = cfg.wandb.group or cfg.data.name
   return wandb.init(
       name=jobname,

@@ -16,4 +16,8 @@ gaurot-cfm:
 
 imgrot-data:
   {{py}} ./scripts/datagen/rotation_image.py
-  {{py}} ./tpflow/apps/01_process_trajectories.py block_size=256 data.name=imgrot
+  {{py}} ./tpflow/apps/01_process_trajectories.py block_size=8 data.name=imgrot
+
+
+imgrot-cfm:
+  {{py}} ./tpflow/apps/02_train_cfm.py -cn imgrot

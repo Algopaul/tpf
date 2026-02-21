@@ -9,6 +9,7 @@ from flanch import Recorder, get_optimizer
 from flanch.optimizer import get_train_step
 from flax import nnx
 from hdfv.histogram_videos import histogram_frames
+from hdfv.images import frame_rgb, grid_shape
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
@@ -91,11 +92,19 @@ def main(cfg: CFMTraining) -> None:
           frames = histogram_frames(out)
           video = np.transpose(frames, (0, 3, 1, 2))
           video = wandb.Video(video, fps=30, format='mp4')
-          run.log({"train/histogram_video": video}, step=epoch + 1)
+          run.log({"train/cfm_trajectories": video}, step=epoch + 1)
           frames = trajectory_video_numpy(out[:, :200, :])
           video = np.transpose(frames, (0, 3, 1, 2))
           video = wandb.Video(video, fps=20, format='mp4')
-          run.log({"train/trajectories": video}, step=epoch + 1)
+          run.log({"train/traces": video}, step=epoch + 1)
+        elif cfg.data.type == 'field':
+          nrows, ncols = grid_shape(cfg.inference.n_samples)
+          frames = [
+              frame_rgb(o, grid=True, nrows=nrows, ncols=ncols) for o in out
+          ]
+          video = np.transpose(frames, (0, 3, 1, 2))
+          video = wandb.Video(video, fps=30, format='mp4')
+          run.log({"train/cfm_trajectories": video}, step=epoch + 1)
 
 
 if __name__ == "__main__":
