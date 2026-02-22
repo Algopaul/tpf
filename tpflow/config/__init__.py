@@ -57,8 +57,8 @@ cs.store(
         model_type='unet',
         unet=UNetConfig(
             channels_inout=1, base_ch=64, use_attn=tuple(4 * [False])),
-        opt=OptimizerConfig(learning_rate=1e-4),
+        opt=OptimizerConfig(learning_rate=1e-4, epochs=1_000),
         data=DataConfig(
-            'imgrot', type='field', batch_size=64, shuffle_block_size=10),
+            'imgrot', type='field', batch_size=128, shuffle_block_size=10),
     ),
 )

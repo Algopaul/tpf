@@ -20,6 +20,7 @@ dependencies = [
   "rich (>=14.3.2,<15.0.0)",
   "typer (>=0.21.1,<0.22.0)",
   "hdfv @ git+ssh://git@github.com/Algopaul/hdfv.git",
+  "hdfx @ git+ssh://git@github.com/Algopaul/hdfx.git",
   "flanch @ git+ssh://git@github.com/Algopaul/flanch.git",
 ]
 
