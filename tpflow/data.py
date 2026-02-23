@@ -19,9 +19,9 @@ def block_shuffle(arr, block_size, seed):
   return out
 
 
-def get_data(cfg: DataConfig):
+def get_data(cfg: DataConfig, split):
   basedir = f'data/datasets/{cfg.name}'
-  in_filename = os.path.join(basedir, 'cfm_train_data', 'train_shuffled.zarr')
+  in_filename = os.path.join(basedir, 'cfm_train_data', f'{split}.zarr')
   file = zarr.open(in_filename, mode='r')
   split_data = {}
   n_batches = None
