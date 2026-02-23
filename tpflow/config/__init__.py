@@ -69,6 +69,16 @@ unet_mid = UNetConfig(
     strides=(1, 1, 1, 2, 2),
 )
 
+unet_xs = UNetConfig(
+    channels_inout=1,
+    base_ch=1,
+    use_attn=tuple(2 * [False]),
+    head_dim_multipliers=tuple(2 * [1]),
+    head_multipliers=tuple(2 * [1]),
+    channel_multipliers=(1, 2),
+    strides=(8, 4),
+)
+
 cs = ConfigStore.instance()
 cs.store(name='config', node=TrajectoryProcessing)
 cs.store(name='cfm', node=CFMTraining)
@@ -83,3 +93,7 @@ cs.store(
             'imgrot', type='field', batch_size=128, shuffle_block_size=10),
     ),
 )
+
+cs.store(group='unet', name='deep', node=unet_deep)
+cs.store(group='unet', name='mid', node=unet_mid)
+cs.store(group='unet', name='xs', node=unet_xs)
