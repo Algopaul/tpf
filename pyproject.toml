@@ -7,7 +7,8 @@ version = "0.1.0"
 
 dependencies = [
   "numpy",
-  "jax",
+  "jax==0.8.2",
+  "flax==0.12.4",
   "h5py",
   "matplotlib",
   "hydra-core",
