@@ -18,6 +18,7 @@ class WandbConfig:
   mode: str = 'online'
   jobname: str = ''
   group: str = ''
+  tag: str = ''
 
 
 @dataclass
@@ -47,6 +48,26 @@ class CFMTraining:
   inference: InferenceConfig = field(default_factory=InferenceConfig)
   eval_interval: int = 50
 
+
+unet_deep = UNetConfig(
+    channels_inout=1,
+    base_ch=64,
+    use_attn=tuple(6 * [False]),
+    head_dim_multipliers=tuple(6 * [1]),
+    head_multipliers=tuple(6 * [1]),
+    channel_multipliers=(1, 2, 2, 4, 4, 8),
+    strides=(1, 1, 1, 2, 2, 2),
+)
+
+unet_mid = UNetConfig(
+    channels_inout=1,
+    base_ch=64,
+    use_attn=tuple(5 * [False]),
+    head_dim_multipliers=tuple(5 * [1]),
+    head_multipliers=tuple(5 * [1]),
+    channel_multipliers=(1, 2, 4, 4, 8),
+    strides=(1, 1, 1, 2, 2),
+)
 
 cs = ConfigStore.instance()
 cs.store(name='config', node=TrajectoryProcessing)
