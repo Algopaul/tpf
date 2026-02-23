@@ -1,8 +1,12 @@
 """Generates raw trajectories for dataset imgrot"""
+from dataclasses import dataclass
+
+import hydra
 import jax
 import jax.numpy as jnp
 import numpy as np
 import zarr
+from hydra.core.config_store import ConfigStore
 from tqdm import tqdm
 
 
@@ -24,9 +28,9 @@ def double_bump(angle, radius, sharpness, grid):
   return b - jnp.mean(b)
 
 
-def get_grid():
+def get_grid(dim: int = 128):
   a, b = -2 * jnp.pi, 2 * jnp.pi
-  x = jnp.linspace(a, b, 128, endpoint=False)
+  x = jnp.linspace(a, b, dim, endpoint=False)
   X, Y = jnp.meshgrid(x, x, indexing='ij')
   return (X, Y)
 
@@ -36,7 +40,7 @@ def trajectory(
     rotation_speed_fn,
     merging_schedule,
     *,
-    initial_distance=1.0,
+    initial_distance=1.2,
     initial_angle=0.0,
     sharpness=10.0,
     grid=None,
@@ -51,22 +55,45 @@ def trajectory(
   return jax.vmap(dbb)(angles, distances)
 
 
-def main():
+@dataclass
+class ImgRot:
+  grid_dim: int = 128
+  speed_schedule: str = 'acc'
+  n_train_samples: int = 3_000
+  n_test_samples: int = 128
+  sharpness: float = 10.0
+
+
+cs = ConfigStore.instance()
+cs.store(name='imgrot', node=ImgRot)
+
+
+@hydra.main(version_base=None, config_name='imgrot', config_path='../../conf')
+def main(cfg: ImgRot) -> None:
   n_timepoints = 100
   time = jnp.linspace(0, 1, n_timepoints)
-  rotation_speed_fn = lambda t: t / 4 + 0.2
+  if cfg.speed_schedule == 'acc':
+    rotation_speed_fn = lambda t: t / 4 + 0.2
+  elif cfg.speed_schedule == 'const':
+    rotation_speed_fn = lambda _: 0.2
+  elif cfg.speed_schedule == 'zero':
+    rotation_speed_fn = lambda _: 0.0
+  else:
+    raise ValueError('Unknown speed schedule')
   merging_schedule = lambda t: 5.0 - 5 * t
-  n_samples = {'train': 3_000, 'test': 128}
+  n_samples = {'train': cfg.n_train_samples, 'test': cfg.n_test_samples}
+  grid = get_grid(cfg.grid_dim)
   for k, v in n_samples.items():
+    name = f'imgrot-{cfg.grid_dim}-{cfg.speed_schedule}'
     root = zarr.create_group(
-        f'data/datasets/imgrot/raw_trajectories/{k}.zarr',
+        f'data/datasets/{name}/raw_trajectories/{k}.zarr',
         overwrite=True,
     )
     initial_angles = np.random.rand(v) * 2 * jnp.pi
     data = root.create_array(
         name='data',
-        shape=(v, n_timepoints, 128, 128, 1),
-        chunks=(1, 100, 128, 128, 1),
+        shape=(v, n_timepoints, cfg.grid_dim, cfg.grid_dim, 1),
+        chunks=(1, 100, cfg.grid_dim, cfg.grid_dim, 1),
         dtype='f8',
     )
     data.attrs.update({
@@ -81,6 +108,8 @@ def main():
               rotation_speed_fn,
               merging_schedule,
               initial_angle=initial_angles[i],
+              sharpness=cfg.sharpness,
+              grid=grid,
           ))[..., None]
 
 

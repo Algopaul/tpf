@@ -14,10 +14,12 @@ gaurot-cfm:
     opt.learning_rate=1e-4 \
     inference.n_samples=20_000 \
 
-imgrot-data:
-  {{py}} ./scripts/datagen/rotation_image.py
-  {{py}} ./tpflow/apps/01_process_trajectories.py block_size=8 data.name=imgrot
+imgrot-raw extras:
+  {{py}} ./scripts/datagen/rotation_image.py --multi sharpness=1.0 grid_dim=64,128 speed_schedule=const,acc {{extras}}
+
+imgrot-processed extras:
+  {{py}} ./tpflow/apps/01_process_trajectories.py --multi block_size=8 data.name=imgrot-64-acc,imgrot-128-acc,imgrot-64-const,imgrot-128-const {{extras}}
 
 
-imgrot-cfm:
-  {{py}} ./tpflow/apps/02_train_cfm.py -cn imgrot --multi +env=torch unet.base_ch=32,64 inference.n_samples=36
+imgrot-cfm-small extras:
+  {{py}} ./tpflow/apps/02_train_cfm.py -cn imgrot --multi data.name=imgrot-64-acc,imgrot-64-const unet.base_ch=32,64 inference.n_samples=36 {{extras}}
