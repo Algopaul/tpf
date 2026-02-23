@@ -56,18 +56,20 @@ def main(cfg: CFMTraining) -> None:
     model = get_model(cfg, rngs=rngs)
     jax.block_until_ready(model)
     logging.info('Model loaded')
-    data = get_data(cfg.data)
+    data = get_data(cfg.data, 'train_shuffled')
+    val_data = get_data(cfg.data, 'test')
     jax.block_until_ready(data)
     logging.info('Data prepared')
     opt = get_optimizer(model, cfg.opt, len(data))
     jax.block_until_ready(opt)
     logging.info('Optimizer initialized')
-    metrics = nnx.metrics.Average()
+    train_err = nnx.metrics.Average()
+    val_err = nnx.metrics.Average()
     r = Recorder()
-    ts, graphdef, state = get_train_step(
+    ts, graphdef, state, loss_fn = get_train_step(
         model,
         opt,
-        metrics,
+        train_err,
         velo_err_pure,
         batch_prep=batch_prep,
     )
@@ -86,9 +88,22 @@ def main(cfg: CFMTraining) -> None:
       run.log({"train/avg_loss": avg_metric.compute()}, step=epoch + 1)
       avg_metric.reset()
 
+      model.eval()
+      pbar = tqdm(enumerate(val_data), total=len(val_data))
+      keys = jrd.split(rngs.param(), len(val_data))
+      for i, batch in pbar:
+        b = (batch['data'], batch['time'], keys[i])
+        loss_val = loss_fn(state, b)
+        met = r({'loss_val': loss_val})
+        val_err.update(values=loss_val)
+        pbar.set_postfix({"loss": f"{met['loss_val']:.2e}"})
+
+      logging.info('Epoch %i: Val. loss %.4e', epoch + 1, val_err.compute())
+      run.log({"val/avg_loss": val_err.compute()}, step=epoch + 1)
+      val_err.reset()
+
       if (epoch + 1) % cfg.eval_interval == 0:
         sample_shape = batch['data'].shape[1:]
-        model.eval()
         out = flow_inference(
             model,
             jrd.normal(jrd.key(0), (cfg.inference.n_samples, *sample_shape)),
