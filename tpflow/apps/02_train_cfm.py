@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 import wandb
 from tpflow.config import CFMTraining
-from tpflow.data import get_data
+from tpflow.data import ZarrData, get_data
 from tpflow.model import flow_inference, get_model
 from tpflow.util import init_wandb, log_duration, trajectory_video_numpy
 
@@ -56,7 +56,7 @@ def main(cfg: CFMTraining) -> None:
     model = get_model(cfg, rngs=rngs)
     jax.block_until_ready(model)
     logging.info('Model loaded')
-    data = get_data(cfg.data, 'train_shuffled')
+    data = ZarrData(cfg.data, 'train_shuffled')
     val_data = get_data(cfg.data, 'test')
     jax.block_until_ready(data)
     logging.info('Data prepared')
@@ -76,7 +76,7 @@ def main(cfg: CFMTraining) -> None:
     for epoch in range(cfg.opt.epochs):
       model.train()
       keys = jrd.split(rngs.param(), len(data))
-      pbar = tqdm(enumerate(data), total=len(data))
+      pbar = tqdm(enumerate(data.iter_batches(epoch)), total=len(data))
       for i, batch in pbar:
         b = (jax.device_put(batch), keys[i])
         loss_val, state = ts(state, b)

@@ -9,6 +9,7 @@ class DataConfig:
   name: str = 'gaurot'
   type: str = 'hist'
   batch_size: int = 100_000
+  block_size: int = 10_000
   shuffle_block_size: int = 1_000
   fields: tuple = ('data', 'time')
 
@@ -90,7 +91,11 @@ cs.store(
             channels_inout=1, base_ch=64, use_attn=tuple(4 * [False])),
         opt=OptimizerConfig(learning_rate=1e-4, epochs=1_000),
         data=DataConfig(
-            'imgrot', type='field', batch_size=128, shuffle_block_size=10),
+            'imgrot',
+            type='field',
+            batch_size=128,
+            shuffle_block_size=8,
+        ),
     ),
 )
 
