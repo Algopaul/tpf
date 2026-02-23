@@ -21,13 +21,13 @@ def block_shuffle(arr, block_size, seed):
 
 def get_data(cfg: DataConfig):
   basedir = f'data/datasets/{cfg.name}'
-  in_filename = os.path.join(basedir, 'cfm_train_data', 'train.zarr')
+  in_filename = os.path.join(basedir, 'cfm_train_data', 'train_shuffled.zarr')
   file = zarr.open(in_filename, mode='r')
   split_data = {}
   n_batches = None
 
   for field in cfg.fields:
-    d = block_shuffle(np.array(file[field]), cfg.shuffle_block_size, 0)
+    d = np.array(file[field])
     batches = len(d) // cfg.batch_size
 
     if n_batches is None:
