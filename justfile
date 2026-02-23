@@ -20,4 +20,4 @@ imgrot-data:
 
 
 imgrot-cfm:
-  {{py}} ./tpflow/apps/02_train_cfm.py -cn imgrot --multi +env=torch unet.base_ch=32,64
+  {{py}} ./tpflow/apps/02_train_cfm.py -cn imgrot --multi +env=torch unet.base_ch=32,64 inference.n_samples=36
