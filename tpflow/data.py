@@ -1,9 +1,28 @@
 import os
 
+import jax
 import numpy as np
 import zarr
 
 from tpflow.config import DataConfig
+
+
+def device_prefetch(it, size=2):
+  it = iter(it)
+  queue = []
+
+  for _ in range(size):
+    try:
+      queue.append(jax.device_put(next(it)))
+    except StopIteration:
+      break
+
+  while queue:
+    yield queue.pop(0)
+    try:
+      queue.append(jax.device_put(next(it)))
+    except StopIteration:
+      pass
 
 
 def block_shuffle(arr, block_size, seed):
