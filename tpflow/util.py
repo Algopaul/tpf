@@ -4,7 +4,7 @@ import os
 import time
 
 import humanize
-import imageio
+import matplotlib
 import numpy as np
 from omegaconf import OmegaConf
 
@@ -66,6 +66,14 @@ def init_wandb(cfg, job_type):
   )
 
 
+def to_pixel(x, y, xlim, ylim, resolution):
+  xmin, xmax = xlim
+  ymin, ymax = ylim
+  px = ((x - xmin) / (xmax - xmin) * (resolution - 1)).astype(int)
+  py = ((y - ymin) / (ymax - ymin) * (resolution - 1)).astype(int)
+  return px, py
+
+
 def trace_video(
     data,
     *,
@@ -84,14 +92,7 @@ def trace_video(
   # Frame buffer (float for accumulation)
   frame = np.zeros((resolution, resolution, 3), dtype=np.float32)
 
-  xmin, xmax = xlim
-  ymin, ymax = ylim
   out_data = []
-
-  def to_pixel(x, y):
-    px = ((x - xmin) / (xmax - xmin) * (resolution - 1)).astype(int)
-    py = ((y - ymin) / (ymax - ymin) * (resolution - 1)).astype(int)
-    return px, py
 
   for t in range(n_time):
 
@@ -101,7 +102,7 @@ def trace_video(
     x = data[t, :, 0]
     y = data[t, :, 1]
 
-    px, py = to_pixel(x, y)
+    px, py = to_pixel(x, y, xlim, ylim, resolution)
 
     # Clip valid pixels
     mask = ((px >= 0) & (px < resolution) & (py >= 0) & (py < resolution))
@@ -114,6 +115,37 @@ def trace_video(
     frame[py, px, 2] += 1.0 * dot_intensity
 
     # Clip for display
+    img = np.clip(frame, 0, 1)
+    rgb = (255 * img).astype(np.uint8)
+    out_data.append(rgb)
+
+  return out_data
+
+
+def angle_color_coded(
+    data,
+    source_data,
+    *,
+    resolution=512,
+    xlim=(-1, 1),
+    ylim=(-1, 1),
+):
+  n_time, _, _ = data.shape
+  cmap = matplotlib.colormaps['hsv']  # cyclic colormap
+  angles = np.arctan2(source_data[:, 1], source_data[:, 0])
+  angles = (np.pi + angles) / (2 * np.pi)
+  colors = cmap(angles)[:, :3]
+  out_data = []
+
+  for t in range(n_time):
+    frame = np.zeros((resolution, resolution, 3), dtype=np.float32)
+    x = data[t, :, 0]
+    y = data[t, :, 1]
+    px, py = to_pixel(x, y, xlim, ylim, resolution)
+    mask = ((px >= 0) & (px < resolution) & (py >= 0) & (py < resolution))
+    px = px[mask]
+    py = py[mask]
+    frame[py, px] = colors[mask]
     img = np.clip(frame, 0, 1)
     rgb = (255 * img).astype(np.uint8)
     out_data.append(rgb)

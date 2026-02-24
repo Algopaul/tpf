@@ -17,7 +17,8 @@ import wandb
 from tpflow.config import CFMTraining
 from tpflow.data import ZarrData, device_prefetch, get_data
 from tpflow.model import flow_inference, get_model
-from tpflow.util import init_wandb, log_duration, trace_video
+from tpflow.util import (angle_color_coded, init_wandb, log_duration,
+                         trace_video)
 
 
 def velo_err_pure(model, batch):
@@ -105,21 +106,32 @@ def main(cfg: CFMTraining) -> None:
 
       if (epoch + 1) % cfg.eval_interval == 0:
         sample_shape = batch['data'].shape[1:]
+        source_batch = jrd.normal(
+            jrd.key(0),
+            (cfg.inference.n_samples, *sample_shape),
+        )
         out = flow_inference(
             model,
-            jrd.normal(jrd.key(0), (cfg.inference.n_samples, *sample_shape)),
+            source_batch,
             jnp.linspace(0, 1, cfg.inference.n_param_steps),
             n_steps=cfg.inference.n_param_steps,
         )
         if cfg.data.type == 'hist':
+          # Histogram video
           frames = histogram_frames(out)
           video = np.transpose(frames, (0, 3, 1, 2))
           video = wandb.Video(video, fps=30, format='mp4')
           run.log({"train/cfm_trajectories": video}, step=epoch + 1)
+          # Trace video
           frames = trace_video(out[:, :200, :])
           video = np.transpose(frames, (0, 3, 1, 2))
           video = wandb.Video(video, fps=20, format='mp4')
           run.log({"train/traces": video}, step=epoch + 1)
+          # Color coded Gaussians
+          frames = angle_color_coded(out, source_batch)
+          video = np.transpose(frames, (0, 3, 1, 2))
+          video = wandb.Video(video, fps=20, format='mp4')
+          run.log({"train/colorcoded": video}, step=epoch + 1)
         elif cfg.data.type == 'field':
           nrows, ncols = grid_shape(cfg.inference.n_samples)
           frames = [
