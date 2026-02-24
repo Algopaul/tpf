@@ -17,8 +17,8 @@ import wandb
 from tpflow.config import CFMTraining
 from tpflow.data import ZarrData, device_prefetch, get_data
 from tpflow.model import flow_inference, get_model
-from tpflow.util import (angle_color_coded, init_wandb, log_duration,
-                         trace_video)
+from tpflow.util import init_wandb, log_duration
+from tpflow.visualization import angle_color_coded, trace_video
 
 
 def get_velo_err(cfg: CFMTraining):
