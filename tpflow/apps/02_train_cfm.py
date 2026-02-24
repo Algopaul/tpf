@@ -46,12 +46,13 @@ def get_velo_err(cfg: CFMTraining):
     pred_err = jnp.mean((pred - given)**2)
 
     if cfg.conditioning_reg > 0:
+      emod = nnx.clone(model)
+      emod.eval()
 
       def model_s(x, t, c):
-        return model(x[None, ...], t[None, ...], c[None, ...])
+        return emod(x[None, ...], t[None, ...], c[None, ...])
 
       jac = jax.vmap(jax.jacrev(model_s, argnums=2))(x, t, conditioning)
-      print(jac.shape)
       reg = jnp.mean(jac**2)
       return pred_err + reg * cfg.conditioning_reg
     else:
