@@ -74,12 +74,12 @@ class ZarrData:
     self.n_batches = None
     self.split_data = {}
     self.fields = cfg.fields
-    assert cfg.batch_size % cfg.shuffle_block_size == 0
+    assert cfg.batch_size % cfg.block_size == 0
 
     for field in cfg.fields:
       d = np.array(file[field])
       batches = len(d) // cfg.batch_size
-      blocks = (batches * cfg.batch_size) // cfg.shuffle_block_size
+      blocks = (batches * cfg.batch_size) // cfg.block_size
 
       if self.n_blocks is None:
         self.n_blocks = blocks

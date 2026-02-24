@@ -44,14 +44,15 @@ def main(cfg: TrajectoryProcessing) -> None:
       outfile = make_outfile(
           out_filename,
           n_samples,
-          cfg.block_size,
+          cfg.data.block_size,
           n_time,
           sample_shape,
       )
 
       time_vector = np.array(infile['time'])
-      for traj_start in tqdm(range(0, n_traj, cfg.block_size)):
-        traj_end = min(traj_start + cfg.block_size, n_traj)
+      for traj_start in tqdm(
+          range(0, n_traj, cfg.data.block_size), desc='Flatten trajectories'):
+        traj_end = min(traj_start + cfg.data.block_size, n_traj)
         data_block = np.array(indata[traj_start:traj_end])
         param_block = np.array(inparam[traj_start:traj_end])
 
@@ -66,7 +67,7 @@ def main(cfg: TrajectoryProcessing) -> None:
 
       if split == 'train':
         shuffled_out = join(basedir, 'cfm_train_data', 'train_shuffled.zarr')
-        zarrshuffle(out_filename, shuffled_out, cfg.data.shuffle_block_size, 0)
+        zarrshuffle(out_filename, shuffled_out, cfg.data.block_size, 0)
 
 
 def make_outfile(name, n_samples, block_size, n_time, sample_shape):

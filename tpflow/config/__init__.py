@@ -10,7 +10,6 @@ class DataConfig:
   type: str = 'hist'
   batch_size: int = 100_000
   block_size: int = 10_000
-  shuffle_block_size: int = 1_000
   fields: tuple = ('data', 'time')
 
 
@@ -27,7 +26,6 @@ class TrajectoryProcessing:
   tag: str = 'default'
   data: DataConfig = field(default_factory=DataConfig)
   dryrun: bool = False
-  block_size: int = 64
   wandb: WandbConfig = field(default_factory=WandbConfig)
 
 
@@ -94,7 +92,7 @@ cs.store(
             'imgrot',
             type='field',
             batch_size=128,
-            shuffle_block_size=8,
+            block_size=8,
         ),
     ),
 )

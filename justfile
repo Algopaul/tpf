@@ -2,7 +2,17 @@ py := ".venv/bin/python"
 
 gaurot-data:
   {{py}} ./scripts/datagen/rotating_gaussians.py
-  {{py}} ./tpflow/apps/01_process_trajectories.py block_size=10_000
+  {{py}} ./tpflow/apps/01_process_trajectories.py data.block_size=10_000
+
+gaurot-cfm-quick extras:
+  {{py}} ./tpflow/apps/02_train_cfm.py --multi {{extras}} \
+    mlp.features_in=4 \
+    mlp.features_inner=64 \
+    mlp.layers=4 \
+    mlp.default_emb_dim=8 \
+    opt.epochs=2_000 \
+    opt.learning_rate=1e-4 \
+    inference.n_samples=20_000 \
 
 gaurot-cfm:
   {{py}} ./tpflow/apps/02_train_cfm.py --multi +env=torch \
