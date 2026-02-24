@@ -36,6 +36,6 @@ imgrot-cfm-small extras:
 
 imgrot-cfm-reg extras:
   {{py}} ./tpflow/apps/02_train_cfm.py -cn imgrot --multi {{extras}} \
-  data.name=imgrot-64-acc unet.base_ch=32,64 \
-  conditioning_reg=0.0,1e-2,1.0,1e2 \
+  data.name=imgrot-64-acc unet.base_ch=32 \
+  conditioning_reg=1e-8,1e-6,1e-4 \
   inference.n_samples=36
