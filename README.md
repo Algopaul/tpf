@@ -21,3 +21,10 @@ data/datasets/{name}/
     │   └── e.g. energy (mean: n_time, var: n_time)
     └── test/
 ```
+
+
+## Apps
+1. process trajectories
+2. train cfm
+3. generate cfm trajectories
+4. train regression
