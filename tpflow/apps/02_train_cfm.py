@@ -90,7 +90,7 @@ def main(cfg: CFMTraining) -> None:
       avg_metric.reset()
 
       model.eval()
-      pbar = tqdm(enumerate(val_data), total=len(val_data))
+      pbar = tqdm(enumerate(device_prefetch(val_data)), total=len(val_data))
       keys = jrd.split(rngs.param(), len(val_data))
       for i, batch in pbar:
         b = jax.device_put((batch['data'], batch['time'], keys[i]))
