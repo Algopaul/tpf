@@ -17,7 +17,7 @@ import wandb
 from tpflow.config import CFMTraining
 from tpflow.data import ZarrData, device_prefetch, get_data
 from tpflow.model import flow_inference, get_model
-from tpflow.util import init_wandb, log_duration, trajectory_video_numpy
+from tpflow.util import init_wandb, log_duration, trace_video
 
 
 def velo_err_pure(model, batch):
@@ -116,7 +116,7 @@ def main(cfg: CFMTraining) -> None:
           video = np.transpose(frames, (0, 3, 1, 2))
           video = wandb.Video(video, fps=30, format='mp4')
           run.log({"train/cfm_trajectories": video}, step=epoch + 1)
-          frames = trajectory_video_numpy(out[:, :200, :])
+          frames = trace_video(out[:, :200, :])
           video = np.transpose(frames, (0, 3, 1, 2))
           video = wandb.Video(video, fps=20, format='mp4')
           run.log({"train/traces": video}, step=epoch + 1)

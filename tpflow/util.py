@@ -66,7 +66,7 @@ def init_wandb(cfg, job_type):
   )
 
 
-def trajectory_video_numpy(
+def trace_video(
     data,
     *,
     resolution=512,
