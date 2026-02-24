@@ -45,6 +45,7 @@ class CFMTraining:
   data: DataConfig = field(default_factory=DataConfig)
   wandb: WandbConfig = field(default_factory=WandbConfig)
   inference: InferenceConfig = field(default_factory=InferenceConfig)
+  conditioning_reg: float = 0.0
   eval_interval: int = 50
 
 

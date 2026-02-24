@@ -21,26 +21,43 @@ from tpflow.util import (angle_color_coded, init_wandb, log_duration,
                          trace_video)
 
 
-def velo_err_pure(model, batch):
-  x_target, conditioning, key = batch
-  k0, k1 = jrd.split(key, 2)
-  t = jrd.uniform(k0, x_target.shape[0])
-  x_source = jrd.normal(k1, x_target.shape)
-  tt = t[:, *((None,) * len(x_source.shape[1:]))]
-  x = (1 - tt) * x_source + tt * x_target
+def get_velo_err(cfg: CFMTraining):
 
-  if conditioning.ndim == 1:
-    conditioning = conditioning[:, None]
-  if t.ndim == 1:
-    t = t[:, None]
+  def velo_err(model, batch):
+    x_target, conditioning, key = batch
+    k0, k1 = jrd.split(key, 2)
+    t = jrd.uniform(k0, x_target.shape[0])
+    x_source = jrd.normal(k1, x_target.shape)
+    tt = t[:, *((None,) * len(x_source.shape[1:]))]
+    x = (1 - tt) * x_source + tt * x_target
 
-  pred = model(
-      x.astype(jnp.float32),
-      t.astype(jnp.float32),
-      conditioning.astype(jnp.float32),
-  ).astype(jnp.float32)
-  given = (x_target - x_source).astype(jnp.float32)
-  return jnp.mean((pred - given)**2)
+    if conditioning.ndim == 1:
+      conditioning = conditioning[:, None]
+    if t.ndim == 1:
+      t = t[:, None]
+
+    x = x.astype(jnp.float32)
+    t = t.astype(jnp.float32)
+    conditioning = conditioning.astype(jnp.float32)
+
+    pred = model(x, t, conditioning).astype(jnp.float32)
+
+    given = (x_target - x_source).astype(jnp.float32)
+    pred_err = jnp.mean((pred - given)**2)
+
+    if cfg.conditioning_reg > 0:
+
+      def model_s(x, t, c):
+        return model(x[None, ...], t[None, ...], c[None, ...])
+
+      jac = jax.vmap(jax.jacrev(model_s, argnums=2))(x, t, conditioning)
+      print(jac.shape)
+      reg = jnp.mean(jac**2)
+      return pred_err + reg * cfg.conditioning_reg
+    else:
+      return pred_err
+
+  return velo_err
 
 
 def batch_prep(batch):
@@ -67,11 +84,12 @@ def main(cfg: CFMTraining) -> None:
     train_err = nnx.metrics.Average()
     val_err = nnx.metrics.Average()
     r = Recorder()
+    velo_err = get_velo_err(cfg)
     ts, graphdef, state, loss_fn = get_train_step(
         model,
         opt,
         train_err,
-        velo_err_pure,
+        velo_err,
         batch_prep=batch_prep,
     )
     for epoch in range(cfg.opt.epochs):
