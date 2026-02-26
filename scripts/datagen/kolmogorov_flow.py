@@ -80,8 +80,9 @@ def main(cfg: KolmogorovFlow) -> None:
 
   # create an initial velocity field and compute the fft of the vorticity.
   # the spectral code assumes an fft'd vorticity for an initial state
+  seed = cfg.seed if cfg.split == 'train' else cfg.seed + 10_000
   v0 = cfd.initial_conditions.filtered_velocity_field(
-      jax.random.PRNGKey(cfg.seed), grid, max_velocity, 4)
+      jax.random.PRNGKey(seed), grid, max_velocity, 4)
   vorticity0 = cfd.finite_differences.curl_2d(v0).data
   vorticity_hat0 = jnp.fft.rfftn(vorticity0)
 
@@ -96,7 +97,13 @@ def main(cfg: KolmogorovFlow) -> None:
       'y': spatial_coord,
   }
   out = jnp.fft.irfftn(trajectory, axes=(1, 2))
-  arr = open_or_create(cfg, (outer_steps, n_dim, n_dim, 1), cfg.n_seeds)
+  ts = out.shape
+  out = jax.image.resize(out, (ts[0], cfg.n_out_dim, cfg.n_out_dim), 'bilinear')
+  arr = open_or_create(
+      cfg,
+      (outer_steps, cfg.n_out_dim, cfg.n_out_dim, 1),
+      cfg.n_seeds,
+  )
   arr[cfg.seed] = np.expand_dims(out, -1)
 
 
