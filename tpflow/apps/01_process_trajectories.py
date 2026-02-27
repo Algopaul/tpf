@@ -47,7 +47,7 @@ def main(cfg: TrajectoryProcessing) -> None:
 
       infile = cast(zarr.Group, zarr.open(in_filename, mode='r'))
       indata = get_array(infile, 'data')
-      inparam = get_array(infile, 'param')
+      inparam = get_array(infile, 'param', indata.shape[0])
 
       n_traj, n_time = indata.shape[:2]
       sample_shape = indata.shape[2:]
@@ -106,11 +106,16 @@ def make_outfile(name, n_samples, block_size, n_time, sample_shape):
   return outfile
 
 
-def get_array(group: zarr.Group, name: str) -> zarr.Array:
-  obj = group[name]
-  if not isinstance(obj, zarr.Array):
-    raise TypeError(f"{name} is not an array")
-  return obj
+def get_array(group: zarr.Group, name: str, size=None) -> zarr.Array:
+  if not name in  group and size is not None:
+    return np.ones((size,))
+  else:
+    obj = group[name]
+    if not isinstance(obj, zarr.Array) and size is None:
+      raise TypeError(f"{name} is not an array")
+    elif size is not None:
+      group[name]=np.ones((size,))
+    return obj
 
 
 if __name__ == "__main__":
