@@ -10,6 +10,7 @@ class DataConfig:
   type: str = 'hist'
   batch_size: int = 100_000
   block_size: int = 10_000
+  trajectory_block_size: int = 8
   fields: tuple = ('data', 'time')
 
 
