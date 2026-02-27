@@ -46,6 +46,7 @@ class CFMTraining:
   wandb: WandbConfig = field(default_factory=WandbConfig)
   inference: InferenceConfig = field(default_factory=InferenceConfig)
   conditioning_reg: float = 0.0
+  conditioning_stepsize: float = 1e-4
   eval_interval: int = 50
 
 
