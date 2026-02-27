@@ -7,6 +7,7 @@ import numpy as np
 import zarr
 from flanch.trajectories import flatten_trajectories
 from hdfx.shuffle import zarrshuffle
+from hdfx.statistics import Welford
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
@@ -21,6 +22,16 @@ from tpflow.util import init_wandb, log_duration
 #   (a) chunk up and train data into individual time points
 # Store test trajectories in one zarr
 # Chunk everything correctly.
+
+
+def ds_statistics(ds, step=None):
+  if step is None:
+    step = int(ds.chunks[0]) if ds.chunks else 10
+  w = Welford(ds.shape[-1] if len(ds.shape) > 1 else 1)
+  for i in tqdm(range(0, ds.shape[0], step), desc=f'Stats for {ds.name}'):
+    l = min(i + step, ds.shape[0])
+    w.update_batch(ds[i:l])
+  return w.mean, w.std
 
 
 @hydra.main(version_base=None, config_name='config', config_path='../../conf')
@@ -48,12 +59,14 @@ def main(cfg: TrajectoryProcessing) -> None:
           n_time,
           sample_shape,
       )
+      data_mean, data_std = ds_statistics(indata)
 
       time_vector = np.array(infile['time'])
       for traj_start in tqdm(
           range(0, n_traj, cfg.data.block_size), desc='Flatten trajectories'):
         traj_end = min(traj_start + cfg.data.block_size, n_traj)
-        data_block = np.array(indata[traj_start:traj_end])
+        data_block = (np.array(indata[traj_start:traj_end]) -
+                      data_mean) / data_std
         param_block = np.array(inparam[traj_start:traj_end])
 
         flat_data, flat_time, flat_param = flatten_trajectories(

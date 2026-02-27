@@ -38,7 +38,7 @@ imgrot-raw extras:
   {{py}} ./scripts/datagen/rotation_image.py --multi sharpness=1.0 grid_dim=64,128 speed_schedule=const,acc {{extras}}
 
 imgrot-processed extras:
-  {{py}} ./tpflow/apps/01_process_trajectories.py --multi block_size=8 data.name=imgrot-64-acc,imgrot-128-acc,imgrot-64-const,imgrot-128-const {{extras}}
+  {{py}} ./tpflow/apps/01_process_trajectories.py --multi data.block_size=8 data.name=imgrot-64-acc,imgrot-128-acc,imgrot-64-const,imgrot-128-const {{extras}}
 
 
 imgrot-cfm-small extras:
