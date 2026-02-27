@@ -63,8 +63,10 @@ def main(cfg: TrajectoryProcessing) -> None:
 
       time_vector = np.array(infile['time'])
       for traj_start in tqdm(
-          range(0, n_traj, cfg.data.block_size), desc='Flatten trajectories'):
-        traj_end = min(traj_start + cfg.data.block_size, n_traj)
+          range(0, n_traj, cfg.data.trajectory_block_size),
+          desc='Flatten trajectories',
+      ):
+        traj_end = min(traj_start + cfg.data.trajectory_block_size, n_traj)
         data_block = (np.array(indata[traj_start:traj_end]) -
                       data_mean) / data_std
         param_block = np.array(inparam[traj_start:traj_end])
@@ -107,14 +109,14 @@ def make_outfile(name, n_samples, block_size, n_time, sample_shape):
 
 
 def get_array(group: zarr.Group, name: str, size=None) -> zarr.Array:
-  if not name in  group and size is not None:
+  if not name in group and size is not None:
     return np.ones((size,))
   else:
     obj = group[name]
     if not isinstance(obj, zarr.Array) and size is None:
       raise TypeError(f"{name} is not an array")
     elif size is not None:
-      group[name]=np.ones((size,))
+      group[name] = np.ones((size,))
     return obj
 
 
