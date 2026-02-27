@@ -54,3 +54,8 @@ imgrot-cfm-reg extras:
   conditioning_reg=1e-6,1e-4,1e-2,1.0 \
   inference.n_samples=36 \
   opt.clip_grad_norm=1.0
+
+kolflow-cfm:
+  {{py}} ./tpflow/apps/02_train_cfm.py -cn imgrot --multi {{extras}} \
+  data.name=kolflow unet.base_ch=32 \
+  inference.n_samples=36
