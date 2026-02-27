@@ -12,7 +12,7 @@ kolflow-test-data extras:
     n_seeds=36
 
 kolflow-processed extras:
-  {{py}} ./tpflow/apps/01_process_trajectories.py --multi data.block_size=8 data.name=kolflow {{extras}}
+  {{py}} ./tpflow/apps/01_process_trajectories.py --multi data.trajectory_block_size=8 data.block_size=32 data.name=kolflow {{extras}}
 
 gaurot-data:
   {{py}} ./scripts/datagen/rotating_gaussians.py
