@@ -2,13 +2,17 @@ py := ".venv/bin/python"
 
 kolflow-train-data extras:
   {{py}} ./scripts/datagen/kolmogorov_flow.py --multi {{extras}} \
-    seed=range\(0,1000\)
+    seed=range\(0,1000\) \
+    n_seeds=10000
 
 kolflow-test-data extras:
   {{py}} ./scripts/datagen/kolmogorov_flow.py --multi {{extras}} \
     seed=range\(0,36\) \
     split=test \
     n_seeds=36
+
+kolflow-processed extras:
+  {{py}} ./tpflow/apps/01_process_trajectories.py --multi data.block_size=8 data.name=kolflow {{extras}}
 
 gaurot-data:
   {{py}} ./scripts/datagen/rotating_gaussians.py
