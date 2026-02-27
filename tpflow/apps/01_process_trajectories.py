@@ -91,17 +91,17 @@ def make_outfile(name, n_samples, block_size, n_time, sample_shape):
       'data',
       shape=(n_samples, *sample_shape),
       dtype='f8',
-      chunks=(block_size * n_time, *sample_shape),
+      chunks=(block_size, *sample_shape),
   )
   outfile.create_array(
       'time',
-      chunks=(block_size * n_time,),
+      chunks=(block_size,),
       shape=(n_samples,),
       dtype='f8',
   )
   outfile.create_array(
       'param',
-      chunks=(block_size * n_time,),
+      chunks=(block_size,),
       shape=(n_samples,),
       dtype='f8',
   )
