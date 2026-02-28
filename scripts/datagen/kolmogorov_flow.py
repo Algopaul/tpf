@@ -70,7 +70,6 @@ def main(cfg: KolmogorovFlow) -> None:
       spectral.equations.ForcedNavierStokes2D(viscosity, grid, smooth=smooth),
       dt)
 
-  # run the simulation up until time 25.0 but only save 10 frames for visualization
   final_time = 25.0
   outer_steps = 128
   inner_steps = (final_time // dt) // outer_steps
@@ -78,8 +77,6 @@ def main(cfg: KolmogorovFlow) -> None:
   trajectory_fn = cfd.funcutils.trajectory(
       cfd.funcutils.repeated(step_fn, inner_steps), outer_steps)
 
-  # create an initial velocity field and compute the fft of the vorticity.
-  # the spectral code assumes an fft'd vorticity for an initial state
   seed = cfg.seed if cfg.split == 'train' else cfg.seed + 10_000
   v0 = cfd.initial_conditions.filtered_velocity_field(
       jax.random.PRNGKey(seed), grid, max_velocity, 4)
