@@ -16,7 +16,7 @@ from tqdm import tqdm
 import wandb
 from tpflow.config import CFMTraining
 from tpflow.data import ZarrData, device_prefetch, get_data
-from tpflow.model import flow_inference, get_model
+from tpflow.model import flow_inference, get_model, store_model
 from tpflow.util import init_wandb, log_duration
 from tpflow.visualization import angle_color_coded, trace_video
 
@@ -119,6 +119,7 @@ def main(cfg: CFMTraining) -> None:
       val_err.reset()
 
       if (epoch + 1) % cfg.eval_interval == 0:
+        store_model(model, cfg, epoch + 1)
         sample_shape = batch['data'].shape[1:]
         source_batch = jrd.normal(
             jrd.key(0),
