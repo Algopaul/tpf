@@ -1,8 +1,14 @@
+import logging
+from pathlib import Path
+
 import jax
 import jax.numpy as jnp
 import numpy as np
+import orbax.checkpoint as ocp
 from flanch.model import EmbMLP, UNet
 from flax import nnx
+from hydra.core.hydra_config import HydraConfig
+from omegaconf import OmegaConf
 from tqdm import tqdm
 
 from tpflow.config import CFMTraining
@@ -75,3 +81,22 @@ def get_model(cfg: CFMTraining, rngs=None):
       return UNet.from_config(cfg.unet, rngs=rngs)
     case _:
       raise ValueError('model_type not supported')
+
+
+def store_model(model, cfg, epoch):
+  run_dir = HydraConfig.get().runtime.output_dir
+  logging.info('Storing model at %s', run_dir)
+  f = Path(run_dir) / f'{epoch}' / 'final'
+  f = f.absolute()
+  checkpointer = ocp.StandardCheckpointer()
+  _, state = nnx.split(model)
+  checkpointer.save(f.parent / 'state', state)
+  checkpointer.wait_until_finished()
+  with open(f.parent / 'config.yaml', 'w') as f:
+    match cfg.model_type:
+      case 'mlp':
+        f.writelines(OmegaConf.to_yaml(cfg.mlp))
+      case 'unet':
+        f.writelines(OmegaConf.to_yaml(cfg.unet))
+      case _:
+        raise ValueError('model_type not supported')
