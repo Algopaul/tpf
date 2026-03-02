@@ -46,7 +46,6 @@ def main(cfg: TrajectoryProcessing) -> None:
           out_filename,
           n_samples,
           cfg.data.block_size,
-          n_time,
           sample_shape,
       )
       data_mean, data_std = ds_statistics(indata)
@@ -75,39 +74,40 @@ def main(cfg: TrajectoryProcessing) -> None:
         zarrshuffle(out_filename, shuffled_out, cfg.data.block_size, 0)
 
 
-def make_outfile(name, n_samples, block_size, n_time, sample_shape):
+def make_outfile(name, n_samples, block_size, sample_shape):
   outfile = zarr.create_group(name, overwrite=True)
-  outfile.create_array(
-      'data',
-      shape=(n_samples, *sample_shape),
-      dtype='f8',
-      chunks=(block_size, *sample_shape),
-  )
-  outfile.create_array(
-      'time',
-      chunks=(block_size,),
-      shape=(n_samples,),
-      dtype='f8',
-  )
-  outfile.create_array(
-      'param',
-      chunks=(block_size,),
-      shape=(n_samples,),
-      dtype='f8',
-  )
+  default = {'shape': (n_samples,), 'chunks': (block_size,)}
+
+  arrays = {
+      'data': {
+          'shape': (n_samples, *sample_shape),
+          'chunks': (block_size, *sample_shape)
+      },
+      'time': default,
+      'param': default,
+  }
+
+  for array_name, config in arrays.items():
+    outfile.create_array(array_name, dtype='f8', **config)
+
   return outfile
 
 
-def get_array(group: zarr.Group, name: str, size=None) -> zarr.Array:
-  if not name in group and size is not None:
-    return np.ones((size,))
-  else:
-    obj = group[name]
-    if not isinstance(obj, zarr.Array) and size is None:
-      raise TypeError(f"{name} is not an array")
-    elif size is not None:
-      group[name] = np.ones((size,))
-    return obj
+def get_array(
+    group: zarr.Group,
+    name: str,
+    size=None,
+) -> zarr.Array | np.ndarray:
+  if name not in group:
+    if size is not None:
+      return np.ones((size,))
+    else:
+      raise KeyError(f"'{name}' not found in group and no size provided")
+
+  obj = group[name]
+  if not isinstance(obj, zarr.Array):
+    raise TypeError(f"'{name}' is not a zarr.Array")
+  return obj
 
 
 if __name__ == "__main__":
