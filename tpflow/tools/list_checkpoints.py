@@ -20,12 +20,14 @@ console = Console()
 
 def find_checkpoints(outputs_dir: Path, dataset: Optional[str]) -> list[dict]:
   results = []
-  for info_file in sorted(outputs_dir.rglob('checkpoint_info.json')):
+  for info_file in outputs_dir.rglob('checkpoint_info.json'):
     info = json.loads(info_file.read_text())
     if dataset and info.get('data_name') != dataset:
       continue
     info['path'] = str(info_file.parent)
+    info['_mtime'] = info_file.stat().st_mtime
     results.append(info)
+  results.sort(key=lambda c: (c.get('data_name', ''), c['_mtime']))
   return results
 
 
