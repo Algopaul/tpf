@@ -42,7 +42,7 @@ imgrot-raw extras:
   {{py}} ./scripts/datagen/rotation_image.py --multi sharpness=1.0 grid_dim=64,128 speed_schedule=const,acc {{extras}}
 
 imgrot-processed extras:
-  {{py}} ./tpflow/apps/01_process_trajectories.py --multi data.block_size=8 data.name=imgrot-64-acc,imgrot-128-acc,imgrot-64-const,imgrot-128-const {{extras}}
+  {{py}} ./tpflow/apps/01_process_trajectories.py --multi data.trajectory_block_size=8 data.block_size=32 data.name=imgrot-64-acc,imgrot-128-acc,imgrot-64-const,imgrot-128-const {{extras}}
 
 
 imgrot-cfm-small extras:
@@ -55,7 +55,15 @@ imgrot-cfm-reg extras:
   inference.n_samples=36 \
   opt.clip_grad_norm=1.0
 
-kolflow-cfm:
+kolflow-cfm extras:
   {{py}} ./tpflow/apps/02_train_cfm.py -cn imgrot --multi {{extras}} \
   data.name=kolflow unet.base_ch=32 \
+  inference.n_samples=36
+
+hw2d-data extras:
+  {{py}} ./tpflow/apps/01_process_trajectories.py --multi data.trajectory_block_size=8 data.block_size=32 data.name=hw2d {{extras}}
+
+hw2d-cfm extras:
+  {{py}} ./tpflow/apps/02_train_cfm.py -cn imgrot --multi {{extras}} \
+  data.name=hw2d unet.base_ch=32,64 \
   inference.n_samples=36
