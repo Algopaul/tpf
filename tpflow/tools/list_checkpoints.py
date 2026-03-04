@@ -44,10 +44,8 @@ def main(
 
   table = Table(show_header=True, header_style='bold')
   table.add_column('epoch', justify='right')
-  table.add_column('dataset')
-  table.add_column('model')
-  table.add_column('sample_shape')
-  table.add_column('path')
+  for c in ['dataset', 'model', 'sample_shape', 'path']:
+    table.add_column(c)
 
   for c in checkpoints:
     table.add_row(
