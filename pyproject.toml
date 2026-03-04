@@ -24,6 +24,7 @@ dependencies = [
   "hdfv @ git+ssh://git@github.com/Algopaul/hdfv.git",
   "hdfx @ git+ssh://git@github.com/Algopaul/hdfx.git",
   "flanch @ git+ssh://git@github.com/Algopaul/flanch.git",
+  "webdataset (>=1.0.2,<2.0.0)",
 ]
 
 [project.optional-dependencies]
@@ -36,3 +37,9 @@ dev = [
 
 [tool.setuptools]
 packages = ["tpflow"]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+ignore = ["**/.venv/**"]
+useLibraryCodeForTypes = true

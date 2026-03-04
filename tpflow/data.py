@@ -1,7 +1,10 @@
+import io
+import json
 import os
 
 import jax
 import numpy as np
+import webdataset as wds
 import zarr
 
 from tpflow.config import DataConfig
@@ -111,3 +114,74 @@ class ZarrData:
       yield {
           f: np.concatenate(self.split_data[f][b], axis=0) for f in self.fields
       }
+
+
+def _decode_npy(key, data):
+  if key.endswith('.npy'):
+    return np.load(io.BytesIO(data))
+  return data
+
+
+class WDSData:
+  """Streaming dataloader backed by WebDataset tar shards.
+
+  Drop-in replacement for ZarrData. Each shard entry is a block of
+  `block_size` samples (set at conversion time). Blocks are shuffled and
+  concatenated into batches of `cfg.batch_size` samples.
+
+  Args:
+    cfg: DataConfig. batch_size and block_size must match the converted shards.
+    split: Dataset split name (e.g. 'train_shuffled', 'test').
+    shuffle_buffer: Number of blocks buffered for shuffling. Larger values
+      give better randomness at the cost of memory. Set to 0 to disable.
+  """
+
+  def __init__(self, cfg: DataConfig, split: str, shuffle_buffer: int = 100):
+    self.cfg = cfg
+    self.fields = cfg.fields
+
+    wds_dir = f'data/datasets/{cfg.name}/cfm_train_data_wds/{split}'
+    with open(os.path.join(wds_dir, 'metadata.json')) as f:
+      meta = json.load(f)
+
+    self.block_size = meta['block_size']
+    assert self.block_size == cfg.block_size, (
+        f'WDS block_size {self.block_size} != cfg.block_size {cfg.block_size}')
+    assert cfg.batch_size % self.block_size == 0
+    self.blocks_per_batch = cfg.batch_size // self.block_size
+
+    n_samples = meta['n_samples']
+    self.n_batches = n_samples // cfg.batch_size
+    self.shuffle_buffer = shuffle_buffer
+
+    import glob as _glob
+    self._shards = sorted(_glob.glob(os.path.join(wds_dir, 'shard-*.tar')))
+
+  def __len__(self):
+    return self.n_batches
+
+  def iter_batches(self, seed=None):
+    rng = np.random.default_rng(seed)
+    shards = list(self._shards)
+    rng.shuffle(shards)
+
+    dataset = (
+        wds.WebDataset(shards, shardshuffle=False)
+        .decode(_decode_npy)
+        .to_tuple(*[f'{f}.npy' for f in self.fields])
+    )
+    if self.shuffle_buffer > 0:
+      dataset = dataset.shuffle(self.shuffle_buffer)
+
+    blocks: dict[str, list] = {f: [] for f in self.fields}
+    batches_yielded = 0
+
+    for sample in dataset:
+      for i, f in enumerate(self.fields):
+        blocks[f].append(sample[i])
+      if len(blocks[self.fields[0]]) == self.blocks_per_batch:
+        yield {f: np.concatenate(blocks[f], axis=0) for f in self.fields}
+        blocks = {f: [] for f in self.fields}
+        batches_yielded += 1
+        if batches_yielded >= self.n_batches:
+          break

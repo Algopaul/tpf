@@ -23,6 +23,14 @@ class WandbConfig:
 
 
 @dataclass
+class WDSConvertConfig:
+  data: DataConfig = field(default_factory=DataConfig)
+  splits: tuple = ('train_shuffled', 'test')
+  blocks_per_shard: int = 500
+  wandb: WandbConfig = field(default_factory=WandbConfig)
+
+
+@dataclass
 class TrajectoryProcessing:
   tag: str = 'default'
   data: DataConfig = field(default_factory=DataConfig)
@@ -82,6 +90,7 @@ unet_xs = UNetConfig(
 )
 
 cs = ConfigStore.instance()
+cs.store(name='wds_convert', node=WDSConvertConfig)
 cs.store(name='config', node=TrajectoryProcessing)
 cs.store(name='cfm', node=CFMTraining)
 cs.store(
