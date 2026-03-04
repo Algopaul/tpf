@@ -150,7 +150,8 @@ def main(cfg: CFMTraining) -> None:
         elif cfg.data.type == 'field':
           nrows, ncols = grid_shape(cfg.inference.n_samples)
           frames = [
-              frame_rgb(o, grid=True, nrows=nrows, ncols=ncols) for o in out
+              frame_rgb(o, grid=True, nrows=nrows, ncols=ncols, channel=0)
+              for o in out
           ]
           video = np.transpose(frames, (0, 3, 1, 2))
           video = wandb.Video(video, fps=30, format='mp4')
