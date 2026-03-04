@@ -86,17 +86,18 @@ def get_model(cfg: CFMTraining, rngs=None):
 def store_model(model, cfg, epoch):
   run_dir = HydraConfig.get().runtime.output_dir
   logging.info('Storing model at %s', run_dir)
-  f = Path(run_dir) / f'{epoch}' / 'final'
-  f = f.absolute()
+  checkpoint_path = Path(run_dir) / f'{epoch}' / 'final'
+  checkpoint_path = checkpoint_path.absolute()
   checkpointer = ocp.StandardCheckpointer()
   _, state = nnx.split(model)
-  checkpointer.save(f.parent / 'state', state)
+  checkpointer.save(checkpoint_path.parent / 'state', state)
   checkpointer.wait_until_finished()
-  with open(f.parent / 'config.yaml', 'w') as f:
+  config_path = checkpoint_path.parent / 'config.yaml'
+  with open(config_path, 'w') as config_file:
     match cfg.model_type:
       case 'mlp':
-        f.writelines(OmegaConf.to_yaml(cfg.mlp))
+        config_file.write(OmegaConf.to_yaml(cfg.mlp))
       case 'unet':
-        f.writelines(OmegaConf.to_yaml(cfg.unet))
+        config_file.write(OmegaConf.to_yaml(cfg.unet))
       case _:
-        raise ValueError('model_type not supported')
+        raise ValueError(f'model_type "{cfg.model_type}" not supported')
