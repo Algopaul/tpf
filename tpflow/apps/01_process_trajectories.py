@@ -106,7 +106,7 @@ def get_array(group: zarr.Group, name: str, size=None) -> zarr.Array:
     if not isinstance(obj, zarr.Array) and size is None:
       raise TypeError(f"{name} is not an array")
     elif size is not None:
-      group[name] = np.ones((size,))
+      return np.ones((size,))
     return obj
 
 
