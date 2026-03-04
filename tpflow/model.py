@@ -83,7 +83,36 @@ def get_model(cfg: CFMTraining, rngs=None):
       raise ValueError('model_type not supported')
 
 
-def store_model(model, cfg, epoch):
+def load_checkpoint_info(checkpoint_dir: str | Path) -> dict:
+  import json
+  with open(Path(checkpoint_dir) / 'checkpoint_info.json') as f:
+    return json.load(f)
+
+
+def load_model(checkpoint_dir: str | Path):
+  from flanch.config import MLPConfig, UNetConfig
+  checkpoint_dir = Path(checkpoint_dir)
+  info = load_checkpoint_info(checkpoint_dir)
+  model_type = info['model_type']
+  raw_cfg = OmegaConf.load(checkpoint_dir / 'config.yaml')
+  rngs = nnx.Rngs(0)
+  match model_type:
+    case 'mlp':
+      model_cfg = OmegaConf.merge(OmegaConf.structured(MLPConfig()), raw_cfg)
+      model = CFMDec(EmbMLP.from_config(model_cfg, rngs=rngs))
+    case 'unet':
+      model_cfg = OmegaConf.merge(OmegaConf.structured(UNetConfig()), raw_cfg)
+      model = UNet.from_config(model_cfg, rngs=rngs)
+    case _:
+      raise ValueError(f'Unknown model_type: {model_type}')
+  graphdef, abstract_state = nnx.split(model)
+  checkpointer = ocp.StandardCheckpointer()
+  state = checkpointer.restore(checkpoint_dir / 'state', abstract_state)
+  return nnx.merge(graphdef, state)
+
+
+def store_model(model, cfg, epoch, sample_shape: tuple):
+  import json
   run_dir = HydraConfig.get().runtime.output_dir
   logging.info('Storing model at %s', run_dir)
   checkpoint_dir = Path(run_dir) / f'{epoch}'
@@ -94,6 +123,13 @@ def store_model(model, cfg, epoch):
   model_cfg = getattr(cfg, cfg.model_type, None)
   if model_cfg is None:
     raise ValueError(f'model_type "{cfg.model_type}" not supported')
-  config_path = checkpoint_dir / 'config.yaml'
-  with open(config_path, 'w') as config_file:
-    config_file.write(OmegaConf.to_yaml(model_cfg))
+  with open(checkpoint_dir / 'config.yaml', 'w') as f:
+    f.write(OmegaConf.to_yaml(model_cfg))
+  info = {
+      'model_type': cfg.model_type,
+      'data_name': cfg.data.name,
+      'sample_shape': list(sample_shape),
+      'epoch': epoch,
+  }
+  with open(checkpoint_dir / 'checkpoint_info.json', 'w') as f:
+    json.dump(info, f, indent=2)

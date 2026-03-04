@@ -46,6 +46,20 @@ class InferenceConfig:
 
 
 @dataclass
+class CondTrajConfig:
+  checkpoint: str = 'MISSING'   # path to {run_dir}/{epoch}/
+  n_samples: int = 256          # total source noise vectors
+  batch_size: int = 256         # samples per forward pass (memory limit)
+  seed: int = 0
+  n_cond_steps: int = 32        # number of conditioning values
+  cond_start: float = 0.0
+  cond_end: float = 1.0
+  n_ode_steps: int = 128        # RK4 integration steps per sample
+  output: str = 'cond_trajectories.zarr'
+  wandb: WandbConfig = field(default_factory=WandbConfig)
+
+
+@dataclass
 class CFMTraining:
   model_type: str = 'mlp'
   mlp: MLPConfig = field(default_factory=MLPConfig)
@@ -91,6 +105,7 @@ unet_xs = UNetConfig(
 
 cs = ConfigStore.instance()
 cs.store(name='wds_convert', node=WDSConvertConfig)
+cs.store(name='cond_traj', node=CondTrajConfig)
 cs.store(name='config', node=TrajectoryProcessing)
 cs.store(name='cfm', node=CFMTraining)
 cs.store(

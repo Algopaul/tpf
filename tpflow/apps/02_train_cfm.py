@@ -119,8 +119,8 @@ def main(cfg: CFMTraining) -> None:
       val_err.reset()
 
       if (epoch + 1) % cfg.eval_interval == 0:
-        store_model(model, cfg, epoch + 1)
         sample_shape = batch['data'].shape[1:]
+        store_model(model, cfg, epoch + 1, sample_shape)
         source_batch = jrd.normal(
             jrd.key(0),
             (cfg.inference.n_samples, *sample_shape),
