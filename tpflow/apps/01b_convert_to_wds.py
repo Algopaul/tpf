@@ -30,7 +30,7 @@ from omegaconf import OmegaConf
 from tqdm import tqdm
 
 from tpflow.config import WDSConvertConfig
-from tpflow.util import log_duration
+from tpflow.util import init_wandb, log_duration
 
 
 def convert_split(
@@ -86,14 +86,15 @@ def convert_split(
 @log_duration()
 def main(cfg: WDSConvertConfig) -> None:
     logging.info("\n%s", OmegaConf.to_yaml(cfg))
-    for split in cfg.splits:
-        convert_split(
-            cfg.data.name,
-            split,
-            cfg.data.fields,
-            cfg.data.block_size,
-            cfg.blocks_per_shard,
-        )
+    with init_wandb(cfg, "wds-convert"):
+        for split in cfg.splits:
+            convert_split(
+                cfg.data.name,
+                split,
+                cfg.data.fields,
+                cfg.data.block_size,
+                cfg.blocks_per_shard,
+            )
 
 
 if __name__ == "__main__":

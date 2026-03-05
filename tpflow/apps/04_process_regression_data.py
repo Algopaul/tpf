@@ -31,7 +31,7 @@ from omegaconf import OmegaConf
 from tqdm import tqdm
 
 from tpflow.config import RegressionDataConfig
-from tpflow.util import log_duration
+from tpflow.util import init_wandb, log_duration
 
 
 def _get_array(
@@ -118,15 +118,15 @@ def _process(
 @log_duration()
 def main(cfg: RegressionDataConfig) -> None:
     logging.info("\n%s", OmegaConf.to_yaml(cfg))
+    with init_wandb(cfg, "regression-data"):
+        _process(cfg.input, cfg.output, cfg.block_size, cfg.trajectory_block_size)
 
-    _process(cfg.input, cfg.output, cfg.block_size, cfg.trajectory_block_size)
+        if cfg.shuffle:
+            shuffled_out = cfg.output.replace(".zarr", "_shuffled.zarr")
+            logging.info("Shuffling to %s", shuffled_out)
+            zarrshuffle(cfg.output, shuffled_out, cfg.block_size, 0)
 
-    if cfg.shuffle:
-        shuffled_out = cfg.output.replace(".zarr", "_shuffled.zarr")
-        logging.info("Shuffling to %s", shuffled_out)
-        zarrshuffle(cfg.output, shuffled_out, cfg.block_size, 0)
-
-    logging.info("Saved regression data to %s", cfg.output)
+        logging.info("Saved regression data to %s", cfg.output)
 
 
 if __name__ == "__main__":

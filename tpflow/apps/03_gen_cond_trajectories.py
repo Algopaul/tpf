@@ -36,7 +36,7 @@ from tqdm import tqdm
 
 from tpflow.config import CondTrajConfig
 from tpflow.model import load_checkpoint_info, load_model, make_flow_fn
-from tpflow.util import log_duration
+from tpflow.util import init_wandb, log_duration
 
 
 def make_output_zarr(
@@ -70,32 +70,33 @@ def main(cfg: CondTrajConfig) -> None:
     model.eval()
     logging.info("Model loaded")
 
-    info = load_checkpoint_info(checkpoint)
-    sample_shape = tuple(info["sample_shape"])
-    cond_values = np.linspace(cfg.cond_start, cfg.cond_end, cfg.n_cond_steps)
+    with init_wandb(cfg, "cond-traj"):
+        info = load_checkpoint_info(checkpoint)
+        sample_shape = tuple(info["sample_shape"])
+        cond_values = np.linspace(cfg.cond_start, cfg.cond_end, cfg.n_cond_steps)
 
-    out = make_output_zarr(
-        cfg.output, cfg.n_cond_steps, cfg.n_samples, sample_shape, cond_values
-    )
+        out = make_output_zarr(
+            cfg.output, cfg.n_cond_steps, cfg.n_samples, sample_shape, cond_values
+        )
 
-    run_fn = make_flow_fn(model, cfg.n_ode_steps)
-    cslist = jnp.array(cond_values)
+        run_fn = make_flow_fn(model, cfg.n_ode_steps)
+        cslist = jnp.array(cond_values)
 
-    key = jrd.key(cfg.seed)
-    n_batches = int(np.ceil(cfg.n_samples / cfg.batch_size))
-    pbar = tqdm(range(n_batches), desc="Batches")
-    for b in pbar:
-        key, subkey = jrd.split(key)
-        start = b * cfg.batch_size
-        end = min(start + cfg.batch_size, cfg.n_samples)
-        source_batch = jrd.normal(subkey, (end - start, *sample_shape))
-        out["source"][start:end] = np.array(source_batch)
+        key = jrd.key(cfg.seed)
+        n_batches = int(np.ceil(cfg.n_samples / cfg.batch_size))
+        pbar = tqdm(range(n_batches), desc="Batches")
+        for b in pbar:
+            key, subkey = jrd.split(key)
+            start = b * cfg.batch_size
+            end = min(start + cfg.batch_size, cfg.n_samples)
+            source_batch = jrd.normal(subkey, (end - start, *sample_shape))
+            out["source"][start:end] = np.array(source_batch)
 
-        # run_fn returns (n_cond_steps, batch, *sample_shape)
-        batch_out = np.array(run_fn(source_batch, cslist))
-        out["data"][start:end] = np.moveaxis(batch_out.astype(np.float32), 0, 1)
+            # run_fn returns (n_cond_steps, batch, *sample_shape)
+            batch_out = np.array(run_fn(source_batch, cslist))
+            out["data"][start:end] = np.moveaxis(batch_out.astype(np.float32), 0, 1)
 
-    logging.info("Saved conditioning trajectories to %s", cfg.output)
+        logging.info("Saved conditioning trajectories to %s", cfg.output)
 
 
 if __name__ == "__main__":
