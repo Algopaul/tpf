@@ -31,12 +31,28 @@ def find_checkpoints(outputs_dir: Path, dataset: Optional[str]) -> list[dict]:
   return results
 
 
+def filter_latest(checkpoints: list[dict]) -> list[dict]:
+  """Keep only the highest-epoch checkpoint per run directory."""
+  best: dict[str, dict] = {}
+  for c in checkpoints:
+    run_dir = str(Path(c['path']).parent)
+    epoch = c.get('epoch', 0)
+    if run_dir not in best or epoch > best[run_dir].get('epoch', 0):
+      best[run_dir] = c
+  # preserve the existing sort order
+  run_order = list(dict.fromkeys(str(Path(c['path']).parent) for c in checkpoints))
+  return [best[r] for r in run_order if r in best]
+
+
 @app.command()
 def main(
     dataset: Optional[str] = typer.Option(None, help='Filter by dataset name'),
     outputs_dir: Path = typer.Option(Path('multirun'), help='Root outputs dir'),
+    latest: bool = typer.Option(False, '--latest', help='Only show the latest epoch per run'),
 ):
   checkpoints = find_checkpoints(outputs_dir, dataset)
+  if latest:
+    checkpoints = filter_latest(checkpoints)
 
   if not checkpoints:
     console.print('[yellow]No checkpoints found.[/yellow]')
