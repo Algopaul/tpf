@@ -116,6 +116,54 @@ class ZarrData:
       }
 
 
+class RegressionZarrData:
+  """Zarr-backed dataloader for regression training data.
+
+  Expects arrays: data, next, time, param — all at a direct zarr path
+  (as written by 04_process_regression_data.py).
+  """
+  _FIELDS = ('data', 'next', 'time', 'param')
+
+  def __init__(self, path: str, batch_size: int, block_size: int):
+    assert batch_size % block_size == 0
+    file = zarr.open(path, mode='r')
+    n_samples = len(file['data'])
+    n_batches = n_samples // batch_size
+    n_blocks = n_batches * (batch_size // block_size)
+    self.n_batches = n_batches
+    self.n_blocks = n_blocks
+    self.split_data = {}
+    for field in self._FIELDS:
+      d = np.array(file[field])
+      self.split_data[field] = np.array(
+          np.split(d[:n_batches * batch_size], n_blocks))
+
+  def __len__(self):
+    return self.n_batches
+
+  def iter_batches(self, seed=None):
+    rng = np.random.default_rng(seed)
+    indices = rng.permutation(self.n_blocks)
+    batch_idcs = np.array(np.split(indices, self.n_batches))
+    for b in batch_idcs:
+      yield {f: np.concatenate(self.split_data[f][b], axis=0) for f in self._FIELDS}
+
+
+def get_regression_val_data(path: str, batch_size: int) -> list[dict]:
+  file = zarr.open(path, mode='r')
+  fields = ('data', 'next', 'time', 'param')
+  split_data = {}
+  n_batches = None
+  for field in fields:
+    d = np.array(file[field])
+    n = len(d) // batch_size
+    if n_batches is None:
+      n_batches = n
+    split_data[field] = np.array_split(d[:n * batch_size], n)
+  assert n_batches is not None
+  return [{f: split_data[f][i] for f in fields} for i in range(n_batches)]
+
+
 def _decode_npy(key, data):
   if key.endswith('.npy'):
     return np.load(io.BytesIO(data))

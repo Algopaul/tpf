@@ -46,6 +46,25 @@ class InferenceConfig:
 
 
 @dataclass
+class RegressionTraining:
+  model_type: str = 'mlp'
+  mlp: MLPConfig = field(default_factory=MLPConfig)
+  unet: UNetConfig = field(default_factory=UNetConfig)
+  opt: OptimizerConfig = field(default_factory=OptimizerConfig)
+  train_data: str = 'MISSING'     # path to training regression zarr
+  val_data: str = 'MISSING'       # path to validation regression zarr
+  rollout_data: str = 'MISSING'   # path to trajectory zarr for rollout eval
+  batch_size: int = 100_000
+  block_size: int = 10_000
+  mode: str = 'step'              # 'step' or 'difference'
+  time_conditioned: bool = True
+  eval_interval: int = 50
+  n_rollout: int = 32
+  data_type: str = 'hist'         # 'hist' or 'field'
+  wandb: WandbConfig = field(default_factory=WandbConfig)
+
+
+@dataclass
 class RegressionDataConfig:
   input: str = 'MISSING'           # path to input .zarr
   output: str = 'regression_data.zarr'
@@ -119,6 +138,7 @@ cs.store(name='cond_traj', node=CondTrajConfig)
 cs.store(name='config', node=TrajectoryProcessing)
 cs.store(name='cfm', node=CFMTraining)
 cs.store(name='regression_data', node=RegressionDataConfig)
+cs.store(name='regression', node=RegressionTraining)
 cs.store(
     name='imgrot',
     node=CFMTraining(

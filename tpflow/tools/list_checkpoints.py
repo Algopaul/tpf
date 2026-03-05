@@ -34,7 +34,7 @@ def find_checkpoints(outputs_dir: Path, dataset: Optional[str]) -> list[dict]:
 @app.command()
 def main(
     dataset: Optional[str] = typer.Option(None, help='Filter by dataset name'),
-    outputs_dir: Path = typer.Option(Path('outputs'), help='Root outputs dir'),
+    outputs_dir: Path = typer.Option(Path('multirun'), help='Root outputs dir'),
 ):
   checkpoints = find_checkpoints(outputs_dir, dataset)
 
