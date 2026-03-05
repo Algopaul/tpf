@@ -7,8 +7,8 @@ in 02_train_cfm.
 
 Two prediction modes:
   step       -- minimises  ||model(x, t, p) - x_next||
-  difference -- minimises  ||x + model(x, t, p) - x_next||
-               rollout is a forward-Euler step: x_{t+1} = x_t + model(x_t, t, p)
+  difference -- minimises  ||model(x, t, p) - (x_next - x) / dt||
+               rollout is a forward-Euler step: x_{t+1} = x_t + dt * model(x_t, t, p)
 
 Two conditioning modes (set via time_conditioned):
   True  -- model receives (x, t, p) as input   (architecture input size n+2)
@@ -55,7 +55,7 @@ from tpflow.visualization import trace_video
 def get_regression_loss(mode: str):
 
     def regression_loss(model, batch):
-        x, x_next, time, param = batch
+        x, x_next, time, step_size, param = batch
         if time.ndim == 1:
             time = time[:, None]
         if param.ndim == 1:
@@ -65,7 +65,8 @@ def get_regression_loss(mode: str):
         param = param.astype(jnp.float32)
         pred = model(x, time, param).astype(jnp.float32)
         if mode == "difference":
-            target = (x_next - x).astype(jnp.float32)
+            dt = step_size.astype(jnp.float32)[:, None]
+            target = ((x_next - x) / dt).astype(jnp.float32)
         else:
             target = x_next.astype(jnp.float32)
         return jnp.mean((pred - target) ** 2)
@@ -79,6 +80,7 @@ def batch_prep(batch):
         batch_dict["data"],
         batch_dict["next"],
         batch_dict["time"],
+        batch_dict["step_size"],
         batch_dict["param"],
     )
 
@@ -149,7 +151,13 @@ def main(cfg: RegressionTraining) -> None:
             pbar = tqdm(enumerate(device_prefetch(val_data)), total=len(val_data))
             for i, batch in pbar:
                 b = jax.device_put(
-                    (batch["data"], batch["next"], batch["time"], batch["param"])
+                    (
+                        batch["data"],
+                        batch["next"],
+                        batch["time"],
+                        batch["step_size"],
+                        batch["param"],
+                    )
                 )
                 loss_val = loss_fn(state, b)
                 met = r({"loss_val": loss_val})

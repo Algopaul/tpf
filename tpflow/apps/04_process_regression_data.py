@@ -66,6 +66,9 @@ def _make_outfile(
         dtype="f4",
     )
     outfile.create_array("time", shape=(n_samples,), chunks=(block_size,), dtype="f8")
+    outfile.create_array(
+        "step_size", shape=(n_samples,), chunks=(block_size,), dtype="f8"
+    )
     outfile.create_array("param", shape=(n_samples,), chunks=(block_size,), dtype="f8")
     return outfile
 
@@ -104,6 +107,7 @@ def _process(
         cur = data_block[:, :-1].reshape(block * n_steps, *state_shape)
         nxt = data_block[:, 1:].reshape(block * n_steps, *state_shape)
         time_flat = np.tile(time_vector[:-1], block)
+        step_size_flat = np.tile(np.diff(time_vector), block)
         param_flat = np.repeat(param_block, n_steps)
 
         sample_start = traj_start * n_steps
@@ -111,6 +115,7 @@ def _process(
         outfile["data"][sample_start:sample_end] = cur  # pyright: ignore[reportArgumentType]
         outfile["next"][sample_start:sample_end] = nxt  # pyright: ignore[reportArgumentType]
         outfile["time"][sample_start:sample_end] = time_flat  # pyright: ignore[reportArgumentType]
+        outfile["step_size"][sample_start:sample_end] = step_size_flat  # pyright: ignore[reportArgumentType]
         outfile["param"][sample_start:sample_end] = param_flat  # pyright: ignore[reportArgumentType]
 
 
