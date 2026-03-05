@@ -46,6 +46,16 @@ class InferenceConfig:
 
 
 @dataclass
+class RegressionDataConfig:
+  input: str = 'MISSING'           # path to input .zarr
+  output: str = 'regression_data.zarr'
+  block_size: int = 10_000
+  trajectory_block_size: int = 8
+  shuffle: bool = True
+  wandb: WandbConfig = field(default_factory=WandbConfig)
+
+
+@dataclass
 class CondTrajConfig:
   checkpoint: str = 'MISSING'   # path to {run_dir}/{epoch}/
   n_samples: int = 256          # total source noise vectors
@@ -108,6 +118,7 @@ cs.store(name='wds_convert', node=WDSConvertConfig)
 cs.store(name='cond_traj', node=CondTrajConfig)
 cs.store(name='config', node=TrajectoryProcessing)
 cs.store(name='cfm', node=CFMTraining)
+cs.store(name='regression_data', node=RegressionDataConfig)
 cs.store(
     name='imgrot',
     node=CFMTraining(
