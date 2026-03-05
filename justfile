@@ -78,5 +78,5 @@ hw2d-cfm-trajectories checkpoint modelname env:
   {{py}} ./tpflow/apps/03_gen_cond_trajectories.py --multi checkpoint={{checkpoint}} n_samples=1000 n_cond_steps=128 output=data/datasets/hw2d/cfm_trajectories/{{modelname}}.zarr {{env}}
 
 hw2d-cfm-trajectories-processed env:
-  {{py}} --multi ./tpflow/apps/04_process_regression_data.py input=data/datasets/hw2d/cfm_trajectories/model1.zarr output=data/datasets/hw2d/reg_train_data/model1.zarr {{env}}
-  {{py}} --multi ./tpflow/apps/04_process_regression_data.py input=data/datasets/hw2d/raw_trajectories/train.zarr output=data/datasets/hw2d/reg_train_data/physics.zarr {{env}}
+  {{py}} ./tpflow/apps/04_process_regression_data.py --multi input=data/datasets/hw2d/cfm_trajectories/model1.zarr output=data/datasets/hw2d/reg_train_data/model1.zarr {{env}}
+  {{py}} ./tpflow/apps/04_process_regression_data.py --multi input=data/datasets/hw2d/raw_trajectories/train.zarr output=data/datasets/hw2d/reg_train_data/physics.zarr {{env}}
