@@ -68,8 +68,8 @@ class RegressionTraining:
 class RegressionDataConfig:
     input: str = "MISSING"  # path to input .zarr
     output: str = "regression_data.zarr"
-    block_size: int = 10_000
-    trajectory_block_size: int = 8
+    block_size: int = 0  # 0 = auto: targets ~2 MB zarr chunks based on state_shape
+    trajectory_block_size: int = 0  # 0 = auto: targets ~2 MB input buffer
     shuffle: bool = True
     wandb: WandbConfig = field(default_factory=WandbConfig)
 

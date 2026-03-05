@@ -123,11 +123,12 @@ class RegressionZarrData:
     (as written by 04_process_regression_data.py).
     """
 
-    _FIELDS = ("data", "next", "time", "step_size", "param")
+    _FIELDS = ("data", "next", "time", "param")
 
     def __init__(self, path: str, batch_size: int, block_size: int):
         assert batch_size % block_size == 0
         file = zarr.open(path, mode="r")
+        self.diff_scale: float = float(file.attrs.get("diff_scale", 1.0))
         n_samples = len(file["data"])
         n_batches = n_samples // batch_size
         n_blocks = n_batches * (batch_size // block_size)
@@ -155,7 +156,7 @@ class RegressionZarrData:
 
 def get_regression_val_data(path: str, batch_size: int) -> list[dict]:
     file = zarr.open(path, mode="r")
-    fields = ("data", "next", "time", "step_size", "param")
+    fields = ("data", "next", "time", "param")
     split_data = {}
     n_batches = None
     for field in fields:

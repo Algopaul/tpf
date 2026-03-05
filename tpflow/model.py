@@ -145,7 +145,7 @@ def get_regression_model(cfg: RegressionTraining, rngs=None):
             raise ValueError(f"model_type {cfg.model_type!r} not supported")
 
 
-def regression_rollout(model, x0, time_vector, param, mode: str):
+def regression_rollout(model, x0, time_vector, param, mode: str, diff_scale: float = 1.0):
     """Roll out a one-step regression model from initial conditions.
 
     Args:
@@ -154,17 +154,19 @@ def regression_rollout(model, x0, time_vector, param, mode: str):
       time_vector: (n_time,) — conditioning-time values
       param:       (n_rollout, 1) — per-trajectory params
       mode:        'step' or 'difference'
+      diff_scale:  std(x_next - x) from training data; used to undo target
+                   normalisation in difference mode (x_{t+1} = x_t + diff_scale * pred)
 
     Returns:
       numpy array of shape (n_time, n_rollout, *state_shape)
     """
 
     @jax.jit
-    def step(x, t_val, dt):
+    def step(x, t_val):
         t = jnp.full((x.shape[0], 1), t_val, dtype=jnp.float32)
         pred = model(x, t, param.astype(jnp.float32)).astype(jnp.float32)
         if mode == "difference":
-            return x + dt * pred
+            return x + diff_scale * pred
         return pred
 
     n_time = len(time_vector)
@@ -172,8 +174,7 @@ def regression_rollout(model, x0, time_vector, param, mode: str):
     x = x0.astype(jnp.float32)
     outs[0] = np.array(x)
     for t_idx in tqdm(range(n_time - 1), desc="Rollout"):
-        dt = float(time_vector[t_idx + 1] - time_vector[t_idx])
-        x = step(x, float(time_vector[t_idx]), dt)
+        x = step(x, float(time_vector[t_idx]))
         jax.block_until_ready(x)
         outs[t_idx + 1] = np.array(x)
     return outs

@@ -11,6 +11,10 @@ Writes a zarr with layout:
     time:  (n_samples,)                time of current state
     param: (n_samples,)                param of trajectory
 
+and a zarr attribute:
+    diff_scale: float  std((x_next - x)) over all samples; used to normalise
+                       difference-mode regression targets so var(target) ≈ 1.
+
 where n_samples = n_trajectories * (n_time - 1).
 
 Usage:
@@ -21,6 +25,7 @@ Usage:
 """
 
 import logging
+import math
 from typing import cast
 
 import hydra
@@ -32,6 +37,17 @@ from tqdm import tqdm
 
 from tpflow.config import RegressionDataConfig
 from tpflow.util import init_wandb, log_duration
+
+
+def _auto_block_sizes(
+    state_shape: tuple, n_time: int, target_mb: float = 2.0
+) -> tuple[int, int]:
+    """Return (block_size, trajectory_block_size) targeting ~target_mb per chunk."""
+    target_bytes = int(target_mb * 1024 * 1024)
+    bytes_per_sample = max(1, math.prod(state_shape)) * 4  # f4 output dtype
+    block_size = max(1, target_bytes // bytes_per_sample)
+    traj_block_size = max(1, target_bytes // (n_time * bytes_per_sample))
+    return block_size, traj_block_size
 
 
 def _get_array(
@@ -66,9 +82,6 @@ def _make_outfile(
         dtype="f4",
     )
     outfile.create_array("time", shape=(n_samples,), chunks=(block_size,), dtype="f8")
-    outfile.create_array(
-        "step_size", shape=(n_samples,), chunks=(block_size,), dtype="f8"
-    )
     outfile.create_array("param", shape=(n_samples,), chunks=(block_size,), dtype="f8")
     return outfile
 
@@ -85,12 +98,23 @@ def _process(
     n_steps = n_time - 1
     n_samples = n_traj * n_steps
 
+    auto_bs, auto_tbs = _auto_block_sizes(state_shape, n_time)
+    block_size = block_size or auto_bs
+    trajectory_block_size = trajectory_block_size or auto_tbs
+    logging.info(
+        "block_size=%d, trajectory_block_size=%d", block_size, trajectory_block_size
+    )
+
     if "time" in infile:
         time_vector = np.array(infile["time"])
     else:
         time_vector = np.arange(n_time, dtype=np.float64)
 
     outfile = _make_outfile(output, n_samples, block_size, state_shape)
+
+    sum_diff = 0.0
+    sum_sq_diff = 0.0
+    count_diff = 0
 
     for traj_start in tqdm(
         range(0, n_traj, trajectory_block_size),
@@ -107,16 +131,24 @@ def _process(
         cur = data_block[:, :-1].reshape(block * n_steps, *state_shape)
         nxt = data_block[:, 1:].reshape(block * n_steps, *state_shape)
         time_flat = np.tile(time_vector[:-1], block)
-        step_size_flat = np.tile(np.diff(time_vector), block)
         param_flat = np.repeat(param_block, n_steps)
+
+        diff = nxt - cur
+        sum_diff += float(np.sum(diff))
+        sum_sq_diff += float(np.sum(diff**2))
+        count_diff += diff.size
 
         sample_start = traj_start * n_steps
         sample_end = traj_end * n_steps
         outfile["data"][sample_start:sample_end] = cur  # pyright: ignore[reportArgumentType]
         outfile["next"][sample_start:sample_end] = nxt  # pyright: ignore[reportArgumentType]
         outfile["time"][sample_start:sample_end] = time_flat  # pyright: ignore[reportArgumentType]
-        outfile["step_size"][sample_start:sample_end] = step_size_flat  # pyright: ignore[reportArgumentType]
         outfile["param"][sample_start:sample_end] = param_flat  # pyright: ignore[reportArgumentType]
+
+    mean_diff = sum_diff / count_diff
+    diff_scale = float(np.sqrt(sum_sq_diff / count_diff - mean_diff**2))
+    outfile.attrs["diff_scale"] = diff_scale
+    logging.info("diff_scale = %.6g", diff_scale)
 
 
 @hydra.main(version_base=None, config_name="regression_data", config_path="../../conf")

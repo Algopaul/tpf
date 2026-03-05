@@ -7,8 +7,9 @@ in 02_train_cfm.
 
 Two prediction modes:
   step       -- minimises  ||model(x, t, p) - x_next||
-  difference -- minimises  ||model(x, t, p) - (x_next - x) / dt||
-               rollout is a forward-Euler step: x_{t+1} = x_t + dt * model(x_t, t, p)
+  difference -- minimises  ||model(x, t, p) - (x_next - x) / diff_scale||
+               rollout is a forward-Euler step: x_{t+1} = x_t + diff_scale * model(x_t, t, p)
+               diff_scale = std(x_next - x) over the training set (stored as zarr attribute)
 
 Two conditioning modes (set via time_conditioned):
   True  -- model receives (x, t, p) as input   (architecture input size n+2)
@@ -52,10 +53,10 @@ from tpflow.util import log_duration
 from tpflow.visualization import trace_video
 
 
-def get_regression_loss(mode: str):
+def get_regression_loss(mode: str, diff_scale: float = 1.0):
 
     def regression_loss(model, batch):
-        x, x_next, time, step_size, param = batch
+        x, x_next, time, param = batch
         if time.ndim == 1:
             time = time[:, None]
         if param.ndim == 1:
@@ -65,8 +66,7 @@ def get_regression_loss(mode: str):
         param = param.astype(jnp.float32)
         pred = model(x, time, param).astype(jnp.float32)
         if mode == "difference":
-            dt = step_size.astype(jnp.float32)[:, None]
-            target = ((x_next - x) / dt).astype(jnp.float32)
+            target = ((x_next - x) / diff_scale).astype(jnp.float32)
         else:
             target = x_next.astype(jnp.float32)
         return jnp.mean((pred - target) ** 2)
@@ -80,7 +80,6 @@ def batch_prep(batch):
         batch_dict["data"],
         batch_dict["next"],
         batch_dict["time"],
-        batch_dict["step_size"],
         batch_dict["param"],
     )
 
@@ -107,18 +106,20 @@ def main(cfg: RegressionTraining) -> None:
         logging.info("Model loaded")
 
         train_data = RegressionZarrData(cfg.train_data, cfg.batch_size, cfg.block_size)
+        diff_scale = train_data.diff_scale
         val_data = get_regression_val_data(cfg.val_data, cfg.batch_size)
         logging.info(
             "Data prepared: %d train batches, %d val batches",
             len(train_data),
             len(val_data),
         )
+        logging.info("diff_scale = %.6g", diff_scale)
 
         opt = get_optimizer(model, cfg.opt, len(train_data))
         jax.block_until_ready(opt)
         logging.info("Optimizer initialized")
 
-        loss_fn_inner = get_regression_loss(cfg.mode)
+        loss_fn_inner = get_regression_loss(cfg.mode, diff_scale)
         train_err = nnx.metrics.Average()
         val_err = nnx.metrics.Average()
         r = Recorder()
@@ -151,13 +152,7 @@ def main(cfg: RegressionTraining) -> None:
             pbar = tqdm(enumerate(device_prefetch(val_data)), total=len(val_data))
             for i, batch in pbar:
                 b = jax.device_put(
-                    (
-                        batch["data"],
-                        batch["next"],
-                        batch["time"],
-                        batch["step_size"],
-                        batch["param"],
-                    )
+                    (batch["data"], batch["next"], batch["time"], batch["param"])
                 )
                 loss_val = loss_fn(state, b)
                 met = r({"loss_val": loss_val})
@@ -171,10 +166,10 @@ def main(cfg: RegressionTraining) -> None:
             if (epoch + 1) % cfg.eval_interval == 0:
                 sample_shape = batch["data"].shape[1:]
                 store_regression_model(model, cfg, epoch + 1, sample_shape)
-                _log_rollout_video(model, cfg, run, epoch + 1)
+                _log_rollout_video(model, cfg, run, epoch + 1, diff_scale)
 
 
-def _log_rollout_video(model, cfg: RegressionTraining, run, step: int):
+def _log_rollout_video(model, cfg: RegressionTraining, run, step: int, diff_scale: float = 1.0):
     traj_file = cast(zarr.Group, zarr.open(cfg.rollout_data, mode="r"))
     traj_data = np.array(traj_file["data"])[: cfg.n_rollout]  # (n, n_time, *state)
     traj_param = (
@@ -192,7 +187,7 @@ def _log_rollout_video(model, cfg: RegressionTraining, run, step: int):
     param = jnp.array(traj_param[:, None])  # (n_rollout, 1)
 
     model.eval()
-    out = regression_rollout(model, x0, time_vector, param, cfg.mode)
+    out = regression_rollout(model, x0, time_vector, param, cfg.mode, diff_scale)
     # out: numpy (n_time, n_rollout, *state_shape)
 
     if cfg.data_type == "hist":
