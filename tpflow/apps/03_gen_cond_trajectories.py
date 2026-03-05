@@ -35,7 +35,7 @@ from omegaconf import OmegaConf
 from tqdm import tqdm
 
 from tpflow.config import CondTrajConfig
-from tpflow.model import flow_inference, load_checkpoint_info, load_model
+from tpflow.model import load_checkpoint_info, load_model, make_flow_fn
 from tpflow.util import log_duration
 
 
@@ -78,6 +78,9 @@ def main(cfg: CondTrajConfig) -> None:
         cfg.output, cfg.n_cond_steps, cfg.n_samples, sample_shape, cond_values
     )
 
+    run_fn = make_flow_fn(model, cfg.n_ode_steps)
+    cslist = jnp.array(cond_values)
+
     key = jrd.key(cfg.seed)
     n_batches = int(np.ceil(cfg.n_samples / cfg.batch_size))
     pbar = tqdm(range(n_batches), desc="Batches")
@@ -88,13 +91,8 @@ def main(cfg: CondTrajConfig) -> None:
         source_batch = jrd.normal(subkey, (end - start, *sample_shape))
         out["source"][start:end] = np.array(source_batch)
 
-        # flow_inference returns (n_cond_steps, batch, *sample_shape)
-        batch_out = flow_inference(
-            model,
-            source_batch,
-            jnp.array(cond_values),
-            n_steps=cfg.n_ode_steps,
-        )
+        # run_fn returns (n_cond_steps, batch, *sample_shape)
+        batch_out = np.array(run_fn(source_batch, cslist))
         out["data"][start:end] = np.moveaxis(batch_out.astype(np.float32), 0, 1)
 
     logging.info("Saved conditioning trajectories to %s", cfg.output)

@@ -14,6 +14,29 @@ from tqdm import tqdm
 from tpflow.config import CFMTraining, RegressionTraining
 
 
+def make_flow_fn(model, n_steps=128):
+    """Return a JIT-compiled inference function. Call once and reuse across batches.
+
+    Args:
+        model: CFM model with a ``rk4_steps`` method.
+        n_steps: Number of ODE integration steps.
+
+    Returns:
+        ``run(source_batch, cslist) -> array of shape (len(cslist), *batch_shape)``
+    """
+
+    @jax.jit
+    def run(source_batch, cslist):
+        t_base = jnp.ones((source_batch.shape[0], 1))
+
+        def run_one(cs):
+            return model.rk4_steps(source_batch, cs * t_base, 0.0, 1.0, n_steps)
+
+        return jax.lax.map(run_one, cslist)
+
+    return run
+
+
 def flow_inference(model, source_batch, cslist, n_steps=128):
 
     @jax.jit
