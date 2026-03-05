@@ -7,7 +7,7 @@ source noise to produce output samples.
 
 Output zarr layout:
     output.zarr/
-        samples:      (n_cond_steps, n_samples, *sample_shape)  generated samples
+        data:         (n_samples, n_cond_steps, *sample_shape)  generated samples
         source:       (n_samples, *sample_shape)                source noise
         conditioning: (n_cond_steps,)                          conditioning values
 
@@ -42,9 +42,9 @@ def make_output_zarr(path: str, n_cond_steps: int, n_samples: int,
                      sample_shape: tuple, cond_values: np.ndarray):
   out = zarr.open_group(path, mode='w')
   out.create_array(
-      'samples',
-      shape=(n_cond_steps, n_samples, *sample_shape),
-      chunks=(1, min(n_samples, 1024), *sample_shape),
+      'data',
+      shape=(n_samples, n_cond_steps, *sample_shape),
+      chunks=(min(n_samples, 1024), 1, *sample_shape),
       dtype='f4',
   )
   out.create_array('source', shape=(n_samples, *sample_shape), dtype='f4')
@@ -72,15 +72,14 @@ def main(cfg: CondTrajConfig) -> None:
                          sample_shape, cond_values)
 
   key = jrd.key(cfg.seed)
-  source = jrd.normal(key, (cfg.n_samples, *sample_shape))
-  out['source'][:] = np.array(source)
-
   n_batches = int(np.ceil(cfg.n_samples / cfg.batch_size))
   pbar = tqdm(range(n_batches), desc='Batches')
   for b in pbar:
+    key, subkey = jrd.split(key)
     start = b * cfg.batch_size
     end = min(start + cfg.batch_size, cfg.n_samples)
-    source_batch = source[start:end]
+    source_batch = jrd.normal(subkey, (end - start, *sample_shape))
+    out['source'][start:end] = np.array(source_batch)
 
     # flow_inference returns (n_cond_steps, batch, *sample_shape)
     batch_out = flow_inference(
@@ -89,7 +88,7 @@ def main(cfg: CondTrajConfig) -> None:
         jnp.array(cond_values),
         n_steps=cfg.n_ode_steps,
     )
-    out['samples'][:, start:end] = batch_out.astype(np.float32)
+    out['data'][start:end] = np.moveaxis(batch_out.astype(np.float32), 0, 1)
 
   logging.info('Saved conditioning trajectories to %s', cfg.output)
 
