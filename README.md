@@ -1,5 +1,5 @@
 ## Dataset storage
-## Dataset  structure
+## Dataset structure
 
 ```
 data/datasets/{name}/

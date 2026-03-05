@@ -1,4 +1,5 @@
 """Generate raw trajectories for dataset gaurot of rotating Gaussians"""
+
 import os
 from pathlib import Path
 
@@ -18,43 +19,43 @@ def gaussians(
     scale=0.07,
     angle=0.0,
 ):
-  key_comp, key_gauss = jrd.split(key)
-  angles = jnp.linspace(0, 2 * jnp.pi, n_bumps, endpoint=False) + angle
-  means_x = radius * jnp.cos(angles)
-  means_y = radius * jnp.sin(angles)
-  means = jnp.stack((means_x, means_y)).T
-  component_ids = jrd.randint(key_comp, n_samples, 0, n_bumps)
-  z = jrd.normal(key_gauss, shape=(n_samples, 2))
-  m = means[component_ids]
-  return m + z * scale
+    key_comp, key_gauss = jrd.split(key)
+    angles = jnp.linspace(0, 2 * jnp.pi, n_bumps, endpoint=False) + angle
+    means_x = radius * jnp.cos(angles)
+    means_y = radius * jnp.sin(angles)
+    means = jnp.stack((means_x, means_y)).T
+    component_ids = jrd.randint(key_comp, n_samples, 0, n_bumps)
+    z = jrd.normal(key_gauss, shape=(n_samples, 2))
+    m = means[component_ids]
+    return m + z * scale
 
 
 def trajectory(seed, n_samples, n_timepoints):
-  out = []
-  for angle in jnp.linspace(0, 2 * jnp.pi / 8, n_timepoints):
-    i, seed = jrd.split(seed)
-    out.append(gaussians(i, n_samples, angle=angle))
-  return jnp.transpose(jnp.stack(out), [1, 0, 2])
+    out = []
+    for angle in jnp.linspace(0, 2 * jnp.pi / 8, n_timepoints):
+        i, seed = jrd.split(seed)
+        out.append(gaussians(i, n_samples, angle=angle))
+    return jnp.transpose(jnp.stack(out), [1, 0, 2])
 
 
 def main():
-  n_timepoints = 60
-  n_samples = {'train': 1_000_000, 'test': 20_000}
-  for i, (k, v) in enumerate(n_samples.items()):
-    root = zarr.create_group(
-        f'data/datasets/gaurot/raw_trajectories/{k}.zarr',
-        overwrite=True,
-    )
-    data = root.create_array('data', shape=(v, n_timepoints, 2), dtype='f8')
-    data.attrs.update({"dims": ["trajectory", "time", "dimension"]})
-    root.create_array("time", data=np.linspace(0, 1, n_timepoints))
-    root.create_array(name='param', data=1.0 * np.ones(v))
-    traj = trajectory(jrd.key(i), v, n_timepoints)
-    vidfile = Path(f'data/plots/rotating_gaussians/{k}.mp4')
-    vidfile.parent.mkdir(parents=True, exist_ok=True)
-    histogram_video(np.transpose(traj, [1, 0, 2]), vidfile, vmax=100)
-    data[:] = np.array(traj)
+    n_timepoints = 60
+    n_samples = {"train": 1_000_000, "test": 20_000}
+    for i, (k, v) in enumerate(n_samples.items()):
+        root = zarr.create_group(
+            f"data/datasets/gaurot/raw_trajectories/{k}.zarr",
+            overwrite=True,
+        )
+        data = root.create_array("data", shape=(v, n_timepoints, 2), dtype="f8")
+        data.attrs.update({"dims": ["trajectory", "time", "dimension"]})
+        root.create_array("time", data=np.linspace(0, 1, n_timepoints))
+        root.create_array(name="param", data=1.0 * np.ones(v))
+        traj = trajectory(jrd.key(i), v, n_timepoints)
+        vidfile = Path(f"data/plots/rotating_gaussians/{k}.mp4")
+        vidfile.parent.mkdir(parents=True, exist_ok=True)
+        histogram_video(np.transpose(traj, [1, 0, 2]), vidfile, vmax=100)
+        data[:] = np.array(traj)
 
 
 if __name__ == "__main__":
-  main()
+    main()

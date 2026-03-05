@@ -6,100 +6,100 @@ from hydra.core.config_store import ConfigStore
 
 @dataclass
 class DataConfig:
-  name: str = 'gaurot'
-  type: str = 'hist'
-  batch_size: int = 100_000
-  block_size: int = 10_000
-  trajectory_block_size: int = 8
-  fields: tuple = ('data', 'time')
+    name: str = "gaurot"
+    type: str = "hist"
+    batch_size: int = 100_000
+    block_size: int = 10_000
+    trajectory_block_size: int = 8
+    fields: tuple = ("data", "time")
 
 
 @dataclass
 class WandbConfig:
-  mode: str = 'online'
-  jobname: str = ''
-  group: str = ''
-  tag: str = ''
+    mode: str = "online"
+    jobname: str = ""
+    group: str = ""
+    tag: str = ""
 
 
 @dataclass
 class WDSConvertConfig:
-  data: DataConfig = field(default_factory=DataConfig)
-  splits: tuple = ('train_shuffled', 'test')
-  blocks_per_shard: int = 500
-  wandb: WandbConfig = field(default_factory=WandbConfig)
+    data: DataConfig = field(default_factory=DataConfig)
+    splits: tuple = ("train_shuffled", "test")
+    blocks_per_shard: int = 500
+    wandb: WandbConfig = field(default_factory=WandbConfig)
 
 
 @dataclass
 class TrajectoryProcessing:
-  tag: str = 'default'
-  data: DataConfig = field(default_factory=DataConfig)
-  dryrun: bool = False
-  wandb: WandbConfig = field(default_factory=WandbConfig)
+    tag: str = "default"
+    data: DataConfig = field(default_factory=DataConfig)
+    dryrun: bool = False
+    wandb: WandbConfig = field(default_factory=WandbConfig)
 
 
 @dataclass
 class InferenceConfig:
-  n_samples: int = 256
-  n_sampling_steps: int = 128
-  n_param_steps: int = 64
+    n_samples: int = 256
+    n_sampling_steps: int = 128
+    n_param_steps: int = 64
 
 
 @dataclass
 class RegressionTraining:
-  model_type: str = 'mlp'
-  mlp: MLPConfig = field(default_factory=MLPConfig)
-  unet: UNetConfig = field(default_factory=UNetConfig)
-  opt: OptimizerConfig = field(default_factory=OptimizerConfig)
-  train_data: str = 'MISSING'     # path to training regression zarr
-  val_data: str = 'MISSING'       # path to validation regression zarr
-  rollout_data: str = 'MISSING'   # path to trajectory zarr for rollout eval
-  batch_size: int = 100_000
-  block_size: int = 10_000
-  mode: str = 'step'              # 'step' or 'difference'
-  time_conditioned: bool = True
-  eval_interval: int = 50
-  n_rollout: int = 32
-  data_type: str = 'hist'         # 'hist' or 'field'
-  wandb: WandbConfig = field(default_factory=WandbConfig)
+    model_type: str = "mlp"
+    mlp: MLPConfig = field(default_factory=MLPConfig)
+    unet: UNetConfig = field(default_factory=UNetConfig)
+    opt: OptimizerConfig = field(default_factory=OptimizerConfig)
+    train_data: str = "MISSING"  # path to training regression zarr
+    val_data: str = "MISSING"  # path to validation regression zarr
+    rollout_data: str = "MISSING"  # path to trajectory zarr for rollout eval
+    batch_size: int = 100_000
+    block_size: int = 10_000
+    mode: str = "step"  # 'step' or 'difference'
+    time_conditioned: bool = True
+    eval_interval: int = 50
+    n_rollout: int = 32
+    data_type: str = "hist"  # 'hist' or 'field'
+    wandb: WandbConfig = field(default_factory=WandbConfig)
 
 
 @dataclass
 class RegressionDataConfig:
-  input: str = 'MISSING'           # path to input .zarr
-  output: str = 'regression_data.zarr'
-  block_size: int = 10_000
-  trajectory_block_size: int = 8
-  shuffle: bool = True
-  wandb: WandbConfig = field(default_factory=WandbConfig)
+    input: str = "MISSING"  # path to input .zarr
+    output: str = "regression_data.zarr"
+    block_size: int = 10_000
+    trajectory_block_size: int = 8
+    shuffle: bool = True
+    wandb: WandbConfig = field(default_factory=WandbConfig)
 
 
 @dataclass
 class CondTrajConfig:
-  checkpoint: str = 'MISSING'   # path to {run_dir}/{epoch}/
-  n_samples: int = 256          # total source noise vectors
-  batch_size: int = 256         # samples per forward pass (memory limit)
-  seed: int = 0
-  n_cond_steps: int = 32        # number of conditioning values
-  cond_start: float = 0.0
-  cond_end: float = 1.0
-  n_ode_steps: int = 128        # RK4 integration steps per sample
-  output: str = 'cond_trajectories.zarr'
-  wandb: WandbConfig = field(default_factory=WandbConfig)
+    checkpoint: str = "MISSING"  # path to {run_dir}/{epoch}/
+    n_samples: int = 256  # total source noise vectors
+    batch_size: int = 256  # samples per forward pass (memory limit)
+    seed: int = 0
+    n_cond_steps: int = 32  # number of conditioning values
+    cond_start: float = 0.0
+    cond_end: float = 1.0
+    n_ode_steps: int = 128  # RK4 integration steps per sample
+    output: str = "cond_trajectories.zarr"
+    wandb: WandbConfig = field(default_factory=WandbConfig)
 
 
 @dataclass
 class CFMTraining:
-  model_type: str = 'mlp'
-  mlp: MLPConfig = field(default_factory=MLPConfig)
-  unet: UNetConfig = field(default_factory=UNetConfig)
-  opt: OptimizerConfig = field(default_factory=OptimizerConfig)
-  data: DataConfig = field(default_factory=DataConfig)
-  wandb: WandbConfig = field(default_factory=WandbConfig)
-  inference: InferenceConfig = field(default_factory=InferenceConfig)
-  conditioning_reg: float = 0.0
-  conditioning_stepsize: float = 1e-4
-  eval_interval: int = 50
+    model_type: str = "mlp"
+    mlp: MLPConfig = field(default_factory=MLPConfig)
+    unet: UNetConfig = field(default_factory=UNetConfig)
+    opt: OptimizerConfig = field(default_factory=OptimizerConfig)
+    data: DataConfig = field(default_factory=DataConfig)
+    wandb: WandbConfig = field(default_factory=WandbConfig)
+    inference: InferenceConfig = field(default_factory=InferenceConfig)
+    conditioning_reg: float = 0.0
+    conditioning_stepsize: float = 1e-4
+    eval_interval: int = 50
 
 
 unet_deep = UNetConfig(
@@ -133,28 +133,27 @@ unet_xs = UNetConfig(
 )
 
 cs = ConfigStore.instance()
-cs.store(name='wds_convert', node=WDSConvertConfig)
-cs.store(name='cond_traj', node=CondTrajConfig)
-cs.store(name='config', node=TrajectoryProcessing)
-cs.store(name='cfm', node=CFMTraining)
-cs.store(name='regression_data', node=RegressionDataConfig)
-cs.store(name='regression', node=RegressionTraining)
+cs.store(name="wds_convert", node=WDSConvertConfig)
+cs.store(name="cond_traj", node=CondTrajConfig)
+cs.store(name="config", node=TrajectoryProcessing)
+cs.store(name="cfm", node=CFMTraining)
+cs.store(name="regression_data", node=RegressionDataConfig)
+cs.store(name="regression", node=RegressionTraining)
 cs.store(
-    name='imgrot',
+    name="imgrot",
     node=CFMTraining(
-        model_type='unet',
-        unet=UNetConfig(
-            channels_inout=1, base_ch=64, use_attn=tuple(4 * [False])),
+        model_type="unet",
+        unet=UNetConfig(channels_inout=1, base_ch=64, use_attn=tuple(4 * [False])),
         opt=OptimizerConfig(learning_rate=1e-4, epochs=1_000),
         data=DataConfig(
-            'imgrot',
-            type='field',
+            "imgrot",
+            type="field",
             batch_size=128,
             block_size=8,
         ),
     ),
 )
 
-cs.store(group='unet', name='deep', node=unet_deep)
-cs.store(group='unet', name='mid', node=unet_mid)
-cs.store(group='unet', name='xs', node=unet_xs)
+cs.store(group="unet", name="deep", node=unet_deep)
+cs.store(group="unet", name="mid", node=unet_mid)
+cs.store(group="unet", name="xs", node=unet_xs)

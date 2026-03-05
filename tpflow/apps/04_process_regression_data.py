@@ -39,84 +39,95 @@ def _get_array(
     name: str,
     size: int | None = None,
 ) -> zarr.Array | np.ndarray:
-  if name not in group:
-    if size is not None:
-      return np.ones((size,))
-    raise KeyError(f"'{name}' not found in group and no size provided")
-  obj = group[name]
-  if not isinstance(obj, zarr.Array):
-    raise TypeError(f"'{name}' is not a zarr.Array")
-  return obj
+    if name not in group:
+        if size is not None:
+            return np.ones((size,))
+        raise KeyError(f"'{name}' not found in group and no size provided")
+    obj = group[name]
+    if not isinstance(obj, zarr.Array):
+        raise TypeError(f"'{name}' is not a zarr.Array")
+    return obj
 
 
-def _make_outfile(path: str, n_samples: int, block_size: int,
-                  state_shape: tuple) -> zarr.Group:
-  outfile = zarr.open_group(path, mode='w')
-  outfile.create_array('data', shape=(n_samples, *state_shape),
-                       chunks=(block_size, *state_shape), dtype='f4')
-  outfile.create_array('next', shape=(n_samples, *state_shape),
-                       chunks=(block_size, *state_shape), dtype='f4')
-  outfile.create_array('time', shape=(n_samples,), chunks=(block_size,), dtype='f8')
-  outfile.create_array('param', shape=(n_samples,), chunks=(block_size,), dtype='f8')
-  return outfile
+def _make_outfile(
+    path: str, n_samples: int, block_size: int, state_shape: tuple
+) -> zarr.Group:
+    outfile = zarr.open_group(path, mode="w")
+    outfile.create_array(
+        "data",
+        shape=(n_samples, *state_shape),
+        chunks=(block_size, *state_shape),
+        dtype="f4",
+    )
+    outfile.create_array(
+        "next",
+        shape=(n_samples, *state_shape),
+        chunks=(block_size, *state_shape),
+        dtype="f4",
+    )
+    outfile.create_array("time", shape=(n_samples,), chunks=(block_size,), dtype="f8")
+    outfile.create_array("param", shape=(n_samples,), chunks=(block_size,), dtype="f8")
+    return outfile
 
 
-def _process(input: str, output: str, block_size: int,
-             trajectory_block_size: int) -> None:
-  infile = cast(zarr.Group, zarr.open(input, mode='r'))
-  indata = _get_array(infile, 'data')
-  inparam = _get_array(infile, 'param', indata.shape[0])
+def _process(
+    input: str, output: str, block_size: int, trajectory_block_size: int
+) -> None:
+    infile = cast(zarr.Group, zarr.open(input, mode="r"))
+    indata = _get_array(infile, "data")
+    inparam = _get_array(infile, "param", indata.shape[0])
 
-  n_traj, n_time = indata.shape[:2]
-  state_shape = indata.shape[2:]
-  n_steps = n_time - 1
-  n_samples = n_traj * n_steps
+    n_traj, n_time = indata.shape[:2]
+    state_shape = indata.shape[2:]
+    n_steps = n_time - 1
+    n_samples = n_traj * n_steps
 
-  if 'time' in infile:
-    time_vector = np.array(infile['time'])
-  else:
-    time_vector = np.arange(n_time, dtype=np.float64)
+    if "time" in infile:
+        time_vector = np.array(infile["time"])
+    else:
+        time_vector = np.arange(n_time, dtype=np.float64)
 
-  outfile = _make_outfile(output, n_samples, block_size, state_shape)
+    outfile = _make_outfile(output, n_samples, block_size, state_shape)
 
-  for traj_start in tqdm(
-      range(0, n_traj, trajectory_block_size),
-      desc='Processing trajectories',
-  ):
-    traj_end = min(traj_start + trajectory_block_size, n_traj)
-    block = traj_end - traj_start
+    for traj_start in tqdm(
+        range(0, n_traj, trajectory_block_size),
+        desc="Processing trajectories",
+    ):
+        traj_end = min(traj_start + trajectory_block_size, n_traj)
+        block = traj_end - traj_start
 
-    data_block = np.array(indata[traj_start:traj_end])  # (block, n_time, *state_shape)
-    param_block = np.array(inparam[traj_start:traj_end])  # (block,)
+        data_block = np.array(
+            indata[traj_start:traj_end]
+        )  # (block, n_time, *state_shape)
+        param_block = np.array(inparam[traj_start:traj_end])  # (block,)
 
-    cur = data_block[:, :-1].reshape(block * n_steps, *state_shape)
-    nxt = data_block[:, 1:].reshape(block * n_steps, *state_shape)
-    time_flat = np.tile(time_vector[:-1], block)
-    param_flat = np.repeat(param_block, n_steps)
+        cur = data_block[:, :-1].reshape(block * n_steps, *state_shape)
+        nxt = data_block[:, 1:].reshape(block * n_steps, *state_shape)
+        time_flat = np.tile(time_vector[:-1], block)
+        param_flat = np.repeat(param_block, n_steps)
 
-    sample_start = traj_start * n_steps
-    sample_end = traj_end * n_steps
-    outfile['data'][sample_start:sample_end] = cur  # pyright: ignore[reportArgumentType]
-    outfile['next'][sample_start:sample_end] = nxt  # pyright: ignore[reportArgumentType]
-    outfile['time'][sample_start:sample_end] = time_flat  # pyright: ignore[reportArgumentType]
-    outfile['param'][sample_start:sample_end] = param_flat  # pyright: ignore[reportArgumentType]
+        sample_start = traj_start * n_steps
+        sample_end = traj_end * n_steps
+        outfile["data"][sample_start:sample_end] = cur  # pyright: ignore[reportArgumentType]
+        outfile["next"][sample_start:sample_end] = nxt  # pyright: ignore[reportArgumentType]
+        outfile["time"][sample_start:sample_end] = time_flat  # pyright: ignore[reportArgumentType]
+        outfile["param"][sample_start:sample_end] = param_flat  # pyright: ignore[reportArgumentType]
 
 
-@hydra.main(
-    version_base=None, config_name='regression_data', config_path='../../conf')
+@hydra.main(version_base=None, config_name="regression_data", config_path="../../conf")
 @log_duration()
 def main(cfg: RegressionDataConfig) -> None:
-  logging.info('\n%s', OmegaConf.to_yaml(cfg))
+    logging.info("\n%s", OmegaConf.to_yaml(cfg))
 
-  _process(cfg.input, cfg.output, cfg.block_size, cfg.trajectory_block_size)
+    _process(cfg.input, cfg.output, cfg.block_size, cfg.trajectory_block_size)
 
-  if cfg.shuffle:
-    shuffled_out = cfg.output.replace('.zarr', '_shuffled.zarr')
-    logging.info('Shuffling to %s', shuffled_out)
-    zarrshuffle(cfg.output, shuffled_out, cfg.block_size, 0)
+    if cfg.shuffle:
+        shuffled_out = cfg.output.replace(".zarr", "_shuffled.zarr")
+        logging.info("Shuffling to %s", shuffled_out)
+        zarrshuffle(cfg.output, shuffled_out, cfg.block_size, 0)
 
-  logging.info('Saved regression data to %s', cfg.output)
+    logging.info("Saved regression data to %s", cfg.output)
 
 
-if __name__ == '__main__':
-  main()
+if __name__ == "__main__":
+    main()

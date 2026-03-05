@@ -39,61 +39,66 @@ from tpflow.model import flow_inference, load_checkpoint_info, load_model
 from tpflow.util import log_duration
 
 
-def make_output_zarr(path: str, n_cond_steps: int, n_samples: int,
-                     sample_shape: tuple, cond_values: np.ndarray):
-  out = zarr.open_group(path, mode='w')
-  out.create_array(
-      'data',
-      shape=(n_samples, n_cond_steps, *sample_shape),
-      chunks=(min(n_samples, 1024), 1, *sample_shape),
-      dtype='f4',
-  )
-  out.create_array('source', shape=(n_samples, *sample_shape), dtype='f4')
-  cond_arr = out.create_array('conditioning', shape=(n_cond_steps,), dtype='f8')
-  cond_arr[:] = cond_values
-  return out
+def make_output_zarr(
+    path: str,
+    n_cond_steps: int,
+    n_samples: int,
+    sample_shape: tuple,
+    cond_values: np.ndarray,
+):
+    out = zarr.open_group(path, mode="w")
+    out.create_array(
+        "data",
+        shape=(n_samples, n_cond_steps, *sample_shape),
+        chunks=(min(n_samples, 1024), 1, *sample_shape),
+        dtype="f4",
+    )
+    out.create_array("source", shape=(n_samples, *sample_shape), dtype="f4")
+    cond_arr = out.create_array("conditioning", shape=(n_cond_steps,), dtype="f8")
+    cond_arr[:] = cond_values
+    return out
 
 
-@hydra.main(
-    version_base=None, config_name='cond_traj', config_path='../../conf')
+@hydra.main(version_base=None, config_name="cond_traj", config_path="../../conf")
 @log_duration()
 def main(cfg: CondTrajConfig) -> None:
-  logging.info('\n%s', OmegaConf.to_yaml(cfg))
+    logging.info("\n%s", OmegaConf.to_yaml(cfg))
 
-  checkpoint = str(Path(cfg.checkpoint).resolve())
-  logging.info('Loading model from %s', checkpoint)
-  model = load_model(checkpoint)
-  model.eval()
-  logging.info('Model loaded')
+    checkpoint = str(Path(cfg.checkpoint).resolve())
+    logging.info("Loading model from %s", checkpoint)
+    model = load_model(checkpoint)
+    model.eval()
+    logging.info("Model loaded")
 
-  info = load_checkpoint_info(checkpoint)
-  sample_shape = tuple(info['sample_shape'])
-  cond_values = np.linspace(cfg.cond_start, cfg.cond_end, cfg.n_cond_steps)
+    info = load_checkpoint_info(checkpoint)
+    sample_shape = tuple(info["sample_shape"])
+    cond_values = np.linspace(cfg.cond_start, cfg.cond_end, cfg.n_cond_steps)
 
-  out = make_output_zarr(cfg.output, cfg.n_cond_steps, cfg.n_samples,
-                         sample_shape, cond_values)
-
-  key = jrd.key(cfg.seed)
-  n_batches = int(np.ceil(cfg.n_samples / cfg.batch_size))
-  pbar = tqdm(range(n_batches), desc='Batches')
-  for b in pbar:
-    key, subkey = jrd.split(key)
-    start = b * cfg.batch_size
-    end = min(start + cfg.batch_size, cfg.n_samples)
-    source_batch = jrd.normal(subkey, (end - start, *sample_shape))
-    out['source'][start:end] = np.array(source_batch)
-
-    # flow_inference returns (n_cond_steps, batch, *sample_shape)
-    batch_out = flow_inference(
-        model,
-        source_batch,
-        jnp.array(cond_values),
-        n_steps=cfg.n_ode_steps,
+    out = make_output_zarr(
+        cfg.output, cfg.n_cond_steps, cfg.n_samples, sample_shape, cond_values
     )
-    out['data'][start:end] = np.moveaxis(batch_out.astype(np.float32), 0, 1)
 
-  logging.info('Saved conditioning trajectories to %s', cfg.output)
+    key = jrd.key(cfg.seed)
+    n_batches = int(np.ceil(cfg.n_samples / cfg.batch_size))
+    pbar = tqdm(range(n_batches), desc="Batches")
+    for b in pbar:
+        key, subkey = jrd.split(key)
+        start = b * cfg.batch_size
+        end = min(start + cfg.batch_size, cfg.n_samples)
+        source_batch = jrd.normal(subkey, (end - start, *sample_shape))
+        out["source"][start:end] = np.array(source_batch)
+
+        # flow_inference returns (n_cond_steps, batch, *sample_shape)
+        batch_out = flow_inference(
+            model,
+            source_batch,
+            jnp.array(cond_values),
+            n_steps=cfg.n_ode_steps,
+        )
+        out["data"][start:end] = np.moveaxis(batch_out.astype(np.float32), 0, 1)
+
+    logging.info("Saved conditioning trajectories to %s", cfg.output)
 
 
-if __name__ == '__main__':
-  main()
+if __name__ == "__main__":
+    main()
