@@ -24,6 +24,7 @@ Usage:
 """
 
 import logging
+from pathlib import Path
 
 import hydra
 import jax.numpy as jnp
@@ -59,12 +60,13 @@ def make_output_zarr(path: str, n_cond_steps: int, n_samples: int,
 def main(cfg: CondTrajConfig) -> None:
   logging.info('\n%s', OmegaConf.to_yaml(cfg))
 
-  logging.info('Loading model from %s', cfg.checkpoint)
-  model = load_model(cfg.checkpoint)
+  checkpoint = str(Path(cfg.checkpoint).resolve())
+  logging.info('Loading model from %s', checkpoint)
+  model = load_model(checkpoint)
   model.eval()
   logging.info('Model loaded')
 
-  info = load_checkpoint_info(cfg.checkpoint)
+  info = load_checkpoint_info(checkpoint)
   sample_shape = tuple(info['sample_shape'])
   cond_values = np.linspace(cfg.cond_start, cfg.cond_end, cfg.n_cond_steps)
 
