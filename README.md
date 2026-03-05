@@ -15,6 +15,11 @@ data/datasets/{name}/
 │   ├── model_1.zarr (data: (n_trajectories, n_time, *state_shape), param: (n_trajectories,))
 │   └── model_2.zarr (data: (n_trajectories, n_time, *state_shape), param: (n_trajectories,))
 │
+├── reg_train_data/
+│   ├── physics.zarr (data: (n_samples, *state_shape), next: (n_samples, *state_shape), time: (n_samples) param: (n_trajectories,))
+│   ├── model1.zarr (data: (n_samples, *state_shape), next: (n_samples, *state_shape), time: (n_samples) param: (n_trajectories,))
+│   └── model2.zarr (data: (n_samples, *state_shape), next: (n_samples, *state_shape), time: (n_samples) param: (n_trajectories,))
+│
 └── stats/
     ├── train/ (n_time, stat_shape)
     │   ├── e.g. enstrophy (mean: n_time, var: n_time)

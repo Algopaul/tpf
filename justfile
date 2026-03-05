@@ -4,22 +4,6 @@ train := py + " ./tpflow/apps/02_train_cfm.py"
 process_defaults := "--multi data.trajectory_block_size=8 data.block_size=32"
 field_cfm_defaults := "-cn imgrot --multi inference.n_samples=36"
 
-kolflow-train-data extras:
-  {{py}} ./scripts/datagen/kolmogorov_flow.py --multi \
-    seed=range\(0,1000\) \
-    n_seeds=10000 \
-    {{extras}}
-
-kolflow-test-data extras:
-  {{py}} ./scripts/datagen/kolmogorov_flow.py --multi \
-    seed=range\(0,36\) \
-    split=test \
-    n_seeds=36 \
-    {{extras}}
-
-kolflow-processed extras:
-  {{process}} {{process_defaults}} data.name=kolflow {{extras}}
-
 gaurot-data:
   {{py}} ./scripts/datagen/rotating_gaussians.py
   {{process}} data.block_size=10_000
@@ -58,8 +42,31 @@ imgrot-cfm-reg extras:
   {{train}} {{field_cfm_defaults}} data.name=imgrot-64-acc unet.base_ch=32 \
     conditioning_reg=1e-6,1e-4,1e-2,1.0 opt.clip_grad_norm=1.0 {{extras}}
 
+kolflow-train-data extras:
+  {{py}} ./scripts/datagen/kolmogorov_flow.py --multi \
+    seed=range\(0,1000\) \
+    n_seeds=10000 \
+    {{extras}}
+
+kolflow-test-data extras:
+  {{py}} ./scripts/datagen/kolmogorov_flow.py --multi \
+    seed=range\(0,36\) \
+    split=test \
+    n_seeds=36 \
+    {{extras}}
+
+kolflow-processed extras:
+  {{process}} {{process_defaults}} data.name=kolflow {{extras}}
+
 kolflow-cfm extras:
   {{train}} {{field_cfm_defaults}} data.name=kolflow unet.base_ch=32 {{extras}}
+
+kolflow-cfm-trajectories checkpoint modelname env:
+  {{py}} ./tpflow/apps/03_gen_cond_trajectories.py --multi checkpoint={{checkpoint}} n_samples=1000 n_cond_steps=128 output=data/datasets/kolflow/cfm_trajectories/{{modelname}}.zarr {{env}}
+
+kolflow-cfm-trajectories-processed env:
+  {{py}} --multi ./tpflow/apps/04_process_regression_data.py input=data/datasets/kolflow/cfm_trajectories/model1.zarr output=data/datasets/kolflow/reg_train_data/model1.zarr {{env}}
+  {{py}} --multi ./tpflow/apps/04_process_regression_data.py input=data/datasets/kolflow/raw_trajectories/train.zarr output=data/datasets/kolflow/reg_train_data/physics.zarr {{env}}
 
 hw2d-data extras:
   {{process}} {{process_defaults}} data.name=hw2d {{extras}}
@@ -70,5 +77,6 @@ hw2d-cfm extras:
 hw2d-cfm-trajectories checkpoint modelname env:
   {{py}} ./tpflow/apps/03_gen_cond_trajectories.py --multi checkpoint={{checkpoint}} n_samples=1000 n_cond_steps=128 output=data/datasets/hw2d/cfm_trajectories/{{modelname}}.zarr {{env}}
 
-kolflow-cfm-trajectories checkpoint modelname env:
-  {{py}} ./tpflow/apps/03_gen_cond_trajectories.py --multi checkpoint={{checkpoint}} n_samples=1000 n_cond_steps=128 output=data/datasets/kolflow/cfm_trajectories/{{modelname}}.zarr {{env}}
+hw2d-cfm-trajectories-processed env:
+  {{py}} --multi ./tpflow/apps/04_process_regression_data.py input=data/datasets/hw2d/cfm_trajectories/model1.zarr output=data/datasets/hw2d/reg_train_data/model1.zarr {{env}}
+  {{py}} --multi ./tpflow/apps/04_process_regression_data.py input=data/datasets/hw2d/raw_trajectories/train.zarr output=data/datasets/hw2d/reg_train_data/physics.zarr {{env}}
