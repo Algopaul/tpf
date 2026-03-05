@@ -88,7 +88,7 @@ def _make_outfile(
 
 def _process(
     input: str, output: str, block_size: int, trajectory_block_size: int
-) -> None:
+) -> int:
     infile = cast(zarr.Group, zarr.open(input, mode="r"))
     indata = _get_array(infile, "data")
     inparam = _get_array(infile, "param", indata.shape[0])
@@ -149,6 +149,7 @@ def _process(
     diff_scale = float(np.sqrt(sum_sq_diff / count_diff - mean_diff**2))
     outfile.attrs["diff_scale"] = diff_scale
     logging.info("diff_scale = %.6g", diff_scale)
+    return block_size
 
 
 @hydra.main(version_base=None, config_name="regression_data", config_path="../../conf")
@@ -156,12 +157,14 @@ def _process(
 def main(cfg: RegressionDataConfig) -> None:
     logging.info("\n%s", OmegaConf.to_yaml(cfg))
     with init_wandb(cfg, "regression-data"):
-        _process(cfg.input, cfg.output, cfg.block_size, cfg.trajectory_block_size)
+        block_size = _process(
+            cfg.input, cfg.output, cfg.block_size, cfg.trajectory_block_size
+        )
 
         if cfg.shuffle:
             shuffled_out = cfg.output.replace(".zarr", "_shuffled.zarr")
             logging.info("Shuffling to %s", shuffled_out)
-            zarrshuffle(cfg.output, shuffled_out, cfg.block_size, 0)
+            zarrshuffle(cfg.output, shuffled_out, block_size, 0)
 
         logging.info("Saved regression data to %s", cfg.output)
 
