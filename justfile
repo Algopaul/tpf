@@ -68,7 +68,7 @@ hw2d-cfm extras:
   {{train}} {{field_cfm_defaults}} data.name=hw2d unet.base_ch=32,64 {{extras}}
 
 hw2d-cfm-trajectories checkpoint modelname env:
-  {{py}} checkpoint={{checkpoint}} n_samples=1000 n_cond_steps=128 output=data/datasets/hw2d/cfm_trajectories/{{modelname}}.zarr --multi {{env}}
+  {{py}} ./tpflow/apps/03_gen_cond_trajectories.py checkpoint={{checkpoint}} n_samples=1000 n_cond_steps=128 output=data/datasets/hw2d/cfm_trajectories/{{modelname}}.zarr --multi {{env}}
 
 kolflow-cfm-trajectories checkpoint modelname env:
-  {{py}} checkpoint={{checkpoint}} n_samples=1000 n_cond_steps=128 output=data/datasets/kolflow/cfm_trajectories/{{modelname}}.zarr --multi {{env}}
+  {{py}} ./tpflow/apps/03_gen_cond_trajectories.py checkpoint={{checkpoint}} n_samples=1000 n_cond_steps=128 output=data/datasets/kolflow/cfm_trajectories/{{modelname}}.zarr --multi {{env}}
