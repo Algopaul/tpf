@@ -16,7 +16,7 @@ from tqdm import tqdm
 import wandb
 from tpflow.config import CFMTraining
 from tpflow.data import ZarrData, device_prefetch, get_data
-from tpflow.model import flow_inference, get_model, store_model
+from tpflow.model import get_model, make_flow_fn, store_model
 from tpflow.util import init_wandb, log_duration
 from tpflow.visualization import angle_color_coded, trace_video
 
@@ -72,7 +72,6 @@ def main(cfg: CFMTraining) -> None:
         logging.info("Model loaded")
         data = ZarrData(cfg.data, "train_shuffled")
         val_data = get_data(cfg.data, "test")
-        jax.block_until_ready(data)
         logging.info("Data prepared")
         opt = get_optimizer(model, cfg.opt, len(data))
         jax.block_until_ready(opt)
@@ -125,12 +124,9 @@ def main(cfg: CFMTraining) -> None:
                     jrd.key(0),
                     (cfg.inference.n_samples, *sample_shape),
                 )
-                out = flow_inference(
-                    model,
-                    source_batch,
-                    jnp.linspace(0, 1, cfg.inference.n_param_steps),
-                    n_steps=cfg.inference.n_param_steps,
-                )
+                cslist = jnp.linspace(0, 1, cfg.inference.n_param_steps)
+                run_fn = make_flow_fn(model, n_steps=cfg.inference.n_param_steps)
+                out = np.array(run_fn(source_batch, cslist))
                 if cfg.data.type == "hist":
                     # Histogram video
                     frames = histogram_frames(out)

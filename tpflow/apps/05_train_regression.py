@@ -25,15 +25,12 @@ Usage:
 """
 
 import logging
-import os
-from typing import cast
 
 import hydra
 import jax
 import jax.numpy as jnp
 import jax.random as jrd
 import numpy as np
-import zarr
 from flanch import Recorder, get_optimizer
 from flanch.optimizer import get_train_step
 from flax import nnx
@@ -50,8 +47,9 @@ from tpflow.model import (
     regression_rollout,
     store_regression_model,
 )
+from tpflow.processing import load_trajectory_zarr
 from tpflow.statistics import trajectory_statistics
-from tpflow.util import log_duration
+from tpflow.util import init_wandb, log_duration
 from tpflow.visualization import trace_video
 
 
@@ -89,17 +87,7 @@ def batch_prep(batch):
 @hydra.main(version_base=None, config_name="regression", config_path="../../conf")
 @log_duration()
 def main(cfg: RegressionTraining) -> None:
-    sid = os.environ.get("SLURM_JOB_ID", "")
-    tc_tag = "tc" if cfg.time_conditioned else "ti"
-    job_name = f"regression_{cfg.mode}_{tc_tag}" + (f"_{sid}" if sid else "")
-
-    with wandb.init(
-        name=job_name,
-        project="two-parameter-flow",
-        job_type="regression-train",
-        config=OmegaConf.to_container(cfg, resolve=True),  # pyright: ignore
-        mode=cfg.wandb.mode,
-    ) as run:
+    with init_wandb(cfg, "regression-train") as run:
         logging.info("\n%s", OmegaConf.to_yaml(cfg))
 
         rngs = nnx.Rngs(0)
@@ -174,18 +162,7 @@ def main(cfg: RegressionTraining) -> None:
 def _log_rollout_eval(
     model, cfg: RegressionTraining, run, step: int, diff_scale: float = 1.0
 ):
-    traj_file = cast(zarr.Group, zarr.open(cfg.rollout_data, mode="r"))
-    traj_data = np.array(traj_file["data"])[: cfg.n_rollout]  # (n_rollout, n_time, *state)
-    traj_param = (
-        np.array(traj_file["param"])[: cfg.n_rollout]
-        if "param" in traj_file
-        else np.ones(cfg.n_rollout)
-    )
-    n_time = traj_data.shape[1]
-    if "time" in traj_file:
-        time_vector = np.array(traj_file["time"])
-    else:
-        time_vector = np.linspace(0, 1, n_time, dtype=np.float32)
+    traj_data, traj_param, time_vector = load_trajectory_zarr(cfg.rollout_data, n=cfg.n_rollout)
 
     x0 = jnp.array(traj_data[:, 0])  # (n_rollout, *state_shape)
     param = jnp.array(traj_param[:, None])  # (n_rollout, 1)

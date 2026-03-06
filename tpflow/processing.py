@@ -5,6 +5,7 @@ can be unit-tested with small synthetic arrays.
 """
 
 import math
+from typing import cast
 
 import numpy as np
 import zarr
@@ -44,6 +45,38 @@ def auto_block_sizes(
     block_size = max(1, target_bytes // bytes_per_sample)
     traj_block_size = max(1, target_bytes // (n_time * bytes_per_sample))
     return block_size, traj_block_size
+
+
+def load_trajectory_zarr(
+    path: str,
+    n: int | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Load a trajectory zarr fully into memory.
+
+    Args:
+        path: path to the zarr group with arrays ``data``, and optionally
+              ``param`` and ``time``.
+        n:    if given, only the first *n* trajectories are loaded.
+
+    Returns:
+        ``(data, param, time_vector)`` as numpy arrays where
+
+        * ``data``        is ``(n_traj, n_time, *state_shape)``
+        * ``param``       is ``(n_traj,)`` — ones if absent in the file
+        * ``time_vector`` is ``(n_time,)`` — ``linspace(0, 1, n_time)`` if absent
+    """
+    g = cast(zarr.Group, zarr.open(path, mode="r"))
+    data_arr = g["data"]
+    assert isinstance(data_arr, zarr.Array)
+    data = np.array(data_arr[:n])
+    n_traj, n_time = data.shape[:2]
+    param = np.array(g["param"][:n_traj]) if "param" in g else np.ones(n_traj)
+    time_vector = (
+        np.array(g["time"])
+        if "time" in g
+        else np.linspace(0.0, 1.0, n_time, dtype=np.float32)
+    )
+    return data, param, time_vector
 
 
 def extract_regression_pairs(

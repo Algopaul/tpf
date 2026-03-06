@@ -180,14 +180,22 @@ def regression_rollout(model, x0, time_vector, param, mode: str, diff_scale: flo
     return outs
 
 
-def store_regression_model(
-    model, cfg: RegressionTraining, epoch: int, sample_shape: tuple
-):
+def _save_checkpoint(
+    model,
+    cfg,
+    epoch: int,
+    sample_shape: tuple,
+    info: dict,
+    output_dir: str | Path,
+) -> None:
+    """Write model state, config.yaml and checkpoint_info.json to *output_dir/epoch/*.
+
+    Separated from Hydra so it can be called and tested without a running
+    Hydra context.
+    """
     import json
 
-    run_dir = HydraConfig.get().runtime.output_dir
-    logging.info("Storing regression model at %s", run_dir)
-    checkpoint_dir = Path(run_dir) / f"{epoch}"
+    checkpoint_dir = Path(output_dir) / f"{epoch}"
     checkpointer = ocp.StandardCheckpointer()
     _, state = nnx.split(model)
     checkpointer.save(checkpoint_dir / "state", state)
@@ -197,15 +205,22 @@ def store_regression_model(
         raise ValueError(f'model_type "{cfg.model_type}" not supported')
     with open(checkpoint_dir / "config.yaml", "w") as f:
         f.write(OmegaConf.to_yaml(model_cfg))
-    info = {
+    with open(checkpoint_dir / "checkpoint_info.json", "w") as f:
+        json.dump(info, f, indent=2)
+
+
+def store_regression_model(
+    model, cfg: RegressionTraining, epoch: int, sample_shape: tuple
+):
+    run_dir = HydraConfig.get().runtime.output_dir
+    logging.info("Storing regression model at %s", run_dir)
+    _save_checkpoint(model, cfg, epoch, sample_shape, output_dir=run_dir, info={
         "model_type": cfg.model_type,
         "time_conditioned": cfg.time_conditioned,
         "mode": cfg.mode,
         "sample_shape": list(sample_shape),
         "epoch": epoch,
-    }
-    with open(checkpoint_dir / "checkpoint_info.json", "w") as f:
-        json.dump(info, f, indent=2)
+    })
 
 
 def load_regression_model(checkpoint_dir: str | Path):
@@ -282,25 +297,11 @@ def load_model(checkpoint_dir: str | Path):
 
 
 def store_model(model, cfg, epoch, sample_shape: tuple):
-    import json
-
     run_dir = HydraConfig.get().runtime.output_dir
     logging.info("Storing model at %s", run_dir)
-    checkpoint_dir = Path(run_dir) / f"{epoch}"
-    checkpointer = ocp.StandardCheckpointer()
-    _, state = nnx.split(model)
-    checkpointer.save(checkpoint_dir / "state", state)
-    checkpointer.wait_until_finished()
-    model_cfg = getattr(cfg, cfg.model_type, None)
-    if model_cfg is None:
-        raise ValueError(f'model_type "{cfg.model_type}" not supported')
-    with open(checkpoint_dir / "config.yaml", "w") as f:
-        f.write(OmegaConf.to_yaml(model_cfg))
-    info = {
+    _save_checkpoint(model, cfg, epoch, sample_shape, output_dir=run_dir, info={
         "model_type": cfg.model_type,
         "data_name": cfg.data.name,
         "sample_shape": list(sample_shape),
         "epoch": epoch,
-    }
-    with open(checkpoint_dir / "checkpoint_info.json", "w") as f:
-        json.dump(info, f, indent=2)
+    })

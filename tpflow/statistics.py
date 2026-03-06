@@ -11,7 +11,7 @@ import numpy as np
 def enstrophy(trajectories: np.ndarray) -> np.ndarray:
     """Mean squared state value per sample at each time step.
 
-    For field data this is the spatial mean of x², i.e. the L2 energy.
+    For field data this is the spatial mean of x**2, i.e. the L2 energy.
     For particle data it is the mean squared position/velocity component.
 
     Args:
