@@ -129,7 +129,7 @@ class RegressionZarrData:
         assert batch_size % block_size == 0
         file = zarr.open(path, mode="r")
         self.diff_scale: float = float(file.attrs.get("diff_scale", 1.0))
-        n_samples = len(file["data"])
+        n_samples = file["data"].shape[0]
         n_batches = n_samples // batch_size
         n_blocks = n_batches * (batch_size // block_size)
         self.n_batches = n_batches
