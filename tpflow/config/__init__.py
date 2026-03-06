@@ -59,7 +59,7 @@ class RegressionTraining:
     mode: str = "step"  # 'step' or 'difference'
     time_conditioned: bool = True
     eval_interval: int = 50
-    n_rollout: int = 32
+    n_rollout: int = 16
     data_type: str = "hist"  # 'hist' or 'field'
     wandb: WandbConfig = field(default_factory=WandbConfig)
 

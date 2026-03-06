@@ -169,7 +169,9 @@ def main(cfg: RegressionTraining) -> None:
                 _log_rollout_video(model, cfg, run, epoch + 1, diff_scale)
 
 
-def _log_rollout_video(model, cfg: RegressionTraining, run, step: int, diff_scale: float = 1.0):
+def _log_rollout_video(
+    model, cfg: RegressionTraining, run, step: int, diff_scale: float = 1.0
+):
     traj_file = cast(zarr.Group, zarr.open(cfg.rollout_data, mode="r"))
     traj_data = np.array(traj_file["data"])[: cfg.n_rollout]  # (n, n_time, *state)
     traj_param = (
@@ -181,7 +183,7 @@ def _log_rollout_video(model, cfg: RegressionTraining, run, step: int, diff_scal
     if "time" in traj_file:
         time_vector = np.array(traj_file["time"])
     else:
-        time_vector = np.arange(n_time, dtype=np.float64)
+        time_vector = np.linspace(0, 1, n_time, dtype=np.float32)
 
     x0 = jnp.array(traj_data[:, 0])  # (n_rollout, *state_shape)
     param = jnp.array(traj_param[:, None])  # (n_rollout, 1)

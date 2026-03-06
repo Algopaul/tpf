@@ -72,7 +72,7 @@ kolflow-regression env:
   {{py}} ./tpflow/apps/05_train_regression.py --multi \
   model_type=unet \
   +unet=mid \
-  unet.base_ch=32,64 \
+  unet.base_ch=32 \
   train_data=./data/datasets/kolflow/reg_train_data/model1.zarr \
   val_data=./data/datasets/kolflow/reg_train_data/model1.zarr \
   rollout_data=./data/datasets/kolflow/cfm_trajectories/model1.zarr \
@@ -80,6 +80,8 @@ kolflow-regression env:
   block_size=32 \
   mode=difference \
   data_type=field \
+  opt.epochs=2_000 \
+  opt.learning_rate=1e-4 \
   {{env}}
 
 hw2d-data extras:
@@ -99,7 +101,7 @@ hw2d-regression env:
   {{py}} ./tpflow/apps/05_train_regression.py --multi \
   model_type=unet \
   +unet=mid \
-  unet.base_ch=32,64 \
+  unet.base_ch=32 \
   train_data=./data/datasets/hw2d/reg_train_data/model1.zarr \
   val_data=./data/datasets/hw2d/reg_train_data/model1.zarr \
   rollout_data=./data/datasets/hw2d/cfm_trajectories/model1.zarr \
@@ -107,4 +109,6 @@ hw2d-regression env:
   block_size=32 \
   mode=difference \
   data_type=field \
+  opt.epochs=2_000 \
+  opt.learning_rate=1e-4 \
   {{env}}
