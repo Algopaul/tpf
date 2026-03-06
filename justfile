@@ -68,6 +68,21 @@ kolflow-cfm-trajectories-processed env:
   {{py}} ./tpflow/apps/04_process_regression_data.py --multi input=data/datasets/kolflow/cfm_trajectories/model1.zarr output=data/datasets/kolflow/reg_train_data/model1.zarr {{env}}
   {{py}} ./tpflow/apps/04_process_regression_data.py --multi input=data/datasets/kolflow/raw_trajectories/train.zarr output=data/datasets/kolflow/reg_train_data/physics.zarr {{env}}
 
+kolflow-regression env:
+  {{py}} ./tpflow/apps/05_process_regression_data.py --multi \
+  input=data/datasets/kolflow/cfm_trajectories/model1.zarr \
+  output=data/datasets/kolflow/reg_train_data/model1.zarr \
+  model_type=unet \
+  unet.base_ch=32,64 \
+  train_data=./data/datasets/kolflow/reg_train_data/model1.zarr \
+  val_data=./data/datasets/kolflow/reg_train_data/model1.zarr \
+  rollout_data=./data/datasets/kolflow/cfm_trajectories/model1.zarr \
+  batch_size=512 \
+  block_size=32 \
+  mode=difference \
+  data_type=field \
+  {{env}}
+
 hw2d-data extras:
   {{process}} {{process_defaults}} data.name=hw2d {{extras}}
 
@@ -80,3 +95,18 @@ hw2d-cfm-trajectories checkpoint modelname env:
 hw2d-cfm-trajectories-processed env:
   {{py}} ./tpflow/apps/04_process_regression_data.py --multi input=data/datasets/hw2d/cfm_trajectories/model1.zarr output=data/datasets/hw2d/reg_train_data/model1.zarr {{env}}
   {{py}} ./tpflow/apps/04_process_regression_data.py --multi input=data/datasets/hw2d/raw_trajectories/train.zarr output=data/datasets/hw2d/reg_train_data/physics.zarr {{env}}
+
+hw2d-regression env:
+  {{py}} ./tpflow/apps/05_process_regression_data.py --multi \
+  input=data/datasets/hw2d/cfm_trajectories/model1.zarr \
+  output=data/datasets/hw2d/reg_train_data/model1.zarr \
+  model_type=unet \
+  unet.base_ch=32,64 \
+  train_data=./data/datasets/hw2d/reg_train_data/model1.zarr \
+  val_data=./data/datasets/hw2d/reg_train_data/model1.zarr \
+  rollout_data=./data/datasets/hw2d/cfm_trajectories/model1.zarr \
+  batch_size=512 \
+  block_size=32 \
+  mode=difference \
+  data_type=field \
+  {{env}}
