@@ -69,7 +69,7 @@ kolflow-cfm-trajectories-processed env:
   {{py}} ./tpflow/apps/04_process_regression_data.py --multi input=data/datasets/kolflow/raw_trajectories/train.zarr output=data/datasets/kolflow/reg_train_data/physics.zarr {{env}}
 
 kolflow-regression env:
-  {{py}} ./tpflow/apps/05_process_regression_data.py --multi \
+  {{py}} ./tpflow/apps/05_train_regression.py --multi \
   input=data/datasets/kolflow/cfm_trajectories/model1.zarr \
   output=data/datasets/kolflow/reg_train_data/model1.zarr \
   model_type=unet \
@@ -97,7 +97,7 @@ hw2d-cfm-trajectories-processed env:
   {{py}} ./tpflow/apps/04_process_regression_data.py --multi input=data/datasets/hw2d/raw_trajectories/train.zarr output=data/datasets/hw2d/reg_train_data/physics.zarr {{env}}
 
 hw2d-regression env:
-  {{py}} ./tpflow/apps/05_process_regression_data.py --multi \
+  {{py}} ./tpflow/apps/05_train_regression.py --multi \
   input=data/datasets/hw2d/cfm_trajectories/model1.zarr \
   output=data/datasets/hw2d/reg_train_data/model1.zarr \
   model_type=unet \
