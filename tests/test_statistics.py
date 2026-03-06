@@ -9,6 +9,8 @@ import numpy as np
 import pytest
 
 from tpflow.statistics import (
+    _dy,
+    _laplacian,
     enstrophy,
     hw2d_energy,
     hw2d_enstrophy,
@@ -17,10 +19,7 @@ from tpflow.statistics import (
     hw2d_statistics,
     kurtosis,
     trajectory_statistics,
-    _dy,
-    _laplacian,
 )
-
 
 # ---------------------------------------------------------------------------
 # Generic statistics
