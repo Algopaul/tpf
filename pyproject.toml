@@ -10,6 +10,7 @@ dependencies = [
   "jax==0.8.2",
   "flax==0.12.4",
   "h5py",
+  "hw2d",
   "matplotlib",
   "hydra-core",
   "hydra-submitit-launcher",
@@ -43,3 +44,4 @@ venvPath = "."
 venv = ".venv"
 ignore = ["**/.venv/**"]
 useLibraryCodeForTypes = true
+extraPaths = ["."]
