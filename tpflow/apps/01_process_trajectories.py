@@ -12,6 +12,7 @@ from omegaconf import OmegaConf
 from tqdm import tqdm
 
 from tpflow.config import TrajectoryProcessing
+from tpflow.processing import open_zarr_array
 from tpflow.util import init_wandb, log_duration
 
 # Input must have fields
@@ -36,8 +37,8 @@ def main(cfg: TrajectoryProcessing) -> None:
             out_filename = join(basedir, "cfm_train_data", split + ".zarr")
 
             infile = cast(zarr.Group, zarr.open(in_filename, mode="r"))
-            indata = get_array(infile, "data")
-            inparam = get_array(infile, "param", indata.shape[0])
+            indata = open_zarr_array(infile, "data")
+            inparam = open_zarr_array(infile, "param", indata.shape[0])
 
             n_traj, n_time = indata.shape[:2]
             sample_shape = indata.shape[2:]
@@ -67,9 +68,9 @@ def main(cfg: TrajectoryProcessing) -> None:
 
                 sample_start = traj_start * n_time
                 sample_end = traj_end * n_time
-                get_array(outfile, "data")[sample_start:sample_end] = flat_data
-                get_array(outfile, "time")[sample_start:sample_end] = flat_time
-                get_array(outfile, "param")[sample_start:sample_end] = flat_param
+                outfile["data"][sample_start:sample_end] = flat_data  # pyright: ignore[reportArgumentType]
+                outfile["time"][sample_start:sample_end] = flat_time  # pyright: ignore[reportArgumentType]
+                outfile["param"][sample_start:sample_end] = flat_param  # pyright: ignore[reportArgumentType]
 
             if split == "train":
                 shuffled_out = join(basedir, "cfm_train_data", "train_shuffled.zarr")
@@ -93,23 +94,6 @@ def make_outfile(name, n_samples, block_size, sample_shape):
         outfile.create_array(array_name, dtype="f8", **config)
 
     return outfile
-
-
-def get_array(
-    group: zarr.Group,
-    name: str,
-    size=None,
-) -> zarr.Array | np.ndarray:
-    if name not in group:
-        if size is not None:
-            return np.ones((size,))
-        else:
-            raise KeyError(f"'{name}' not found in group and no size provided")
-
-    obj = group[name]
-    if not isinstance(obj, zarr.Array):
-        raise TypeError(f"'{name}' is not a zarr.Array")
-    return obj
 
 
 if __name__ == "__main__":

@@ -41,6 +41,7 @@ from hdfv.images import frame_rgb, grid_shape
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
+import matplotlib.pyplot as plt
 import wandb
 from tpflow.config import RegressionTraining
 from tpflow.data import RegressionZarrData, device_prefetch, get_regression_val_data
@@ -49,6 +50,7 @@ from tpflow.model import (
     regression_rollout,
     store_regression_model,
 )
+from tpflow.statistics import trajectory_statistics
 from tpflow.util import log_duration
 from tpflow.visualization import trace_video
 
@@ -166,14 +168,14 @@ def main(cfg: RegressionTraining) -> None:
             if (epoch + 1) % cfg.eval_interval == 0:
                 sample_shape = batch["data"].shape[1:]
                 store_regression_model(model, cfg, epoch + 1, sample_shape)
-                _log_rollout_video(model, cfg, run, epoch + 1, diff_scale)
+                _log_rollout_eval(model, cfg, run, epoch + 1, diff_scale)
 
 
-def _log_rollout_video(
+def _log_rollout_eval(
     model, cfg: RegressionTraining, run, step: int, diff_scale: float = 1.0
 ):
     traj_file = cast(zarr.Group, zarr.open(cfg.rollout_data, mode="r"))
-    traj_data = np.array(traj_file["data"])[: cfg.n_rollout]  # (n, n_time, *state)
+    traj_data = np.array(traj_file["data"])[: cfg.n_rollout]  # (n_rollout, n_time, *state)
     traj_param = (
         np.array(traj_file["param"])[: cfg.n_rollout]
         if "param" in traj_file
@@ -190,7 +192,7 @@ def _log_rollout_video(
 
     model.eval()
     out = regression_rollout(model, x0, time_vector, param, cfg.mode, diff_scale)
-    # out: numpy (n_time, n_rollout, *state_shape)
+    # out: (n_time, n_rollout, *state_shape)
 
     if cfg.data_type == "hist":
         frames = trace_video(out)  # expects (n_time, n_particles, 2)
@@ -203,6 +205,52 @@ def _log_rollout_video(
         ]
         video = np.array(np.transpose(frames, (0, 3, 1, 2)))
         run.log({"eval/rollout": wandb.Video(video, fps=30, format="mp4")}, step=step)
+
+    # reference: (n_rollout, n_time, *state) → (n_time, n_rollout, *state)
+    ref = np.moveaxis(traj_data, 0, 1)
+    rollout_stats = trajectory_statistics(out)
+    ref_stats = trajectory_statistics(ref)
+    for stat_name in rollout_stats:
+        fig = _stats_figure(stat_name, rollout_stats[stat_name], ref_stats[stat_name], time_vector)
+        run.log({f"eval/{stat_name}": wandb.Image(fig)}, step=step)
+        plt.close(fig)
+
+
+def _stats_figure(
+    stat_name: str,
+    rollout_vals: np.ndarray,
+    ref_vals: np.ndarray,
+    time_vector: np.ndarray,
+):
+    """Create a mean ± std plot comparing rollout and reference ensembles.
+
+    Args:
+        stat_name:    name used for the y-axis label and title
+        rollout_vals: ``(n_time, n_rollout)`` from the model
+        ref_vals:     ``(n_time, n_rollout)`` from the reference data
+        time_vector:  ``(n_time,)`` x-axis values
+
+    Returns:
+        Matplotlib figure (caller is responsible for closing it).
+    """
+    t = time_vector
+
+    rm = np.mean(rollout_vals, axis=1)
+    rs = np.std(rollout_vals, axis=1)
+    fm = np.mean(ref_vals, axis=1)
+    fs = np.std(ref_vals, axis=1)
+
+    fig, ax = plt.subplots(figsize=(6, 3))
+    ax.fill_between(t, rm - rs, rm + rs, alpha=0.25, color="tab:blue")
+    ax.plot(t, rm, color="tab:blue", label="rollout")
+    ax.fill_between(t, fm - fs, fm + fs, alpha=0.25, color="tab:orange")
+    ax.plot(t, fm, color="tab:orange", linestyle="--", label="reference")
+    ax.set_xlabel("time")
+    ax.set_ylabel(stat_name)
+    ax.set_title(stat_name)
+    ax.legend()
+    fig.tight_layout()
+    return fig
 
 
 if __name__ == "__main__":

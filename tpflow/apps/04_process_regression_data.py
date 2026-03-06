@@ -25,7 +25,6 @@ Usage:
 """
 
 import logging
-import math
 from typing import cast
 
 import hydra
@@ -36,33 +35,8 @@ from omegaconf import OmegaConf
 from tqdm import tqdm
 
 from tpflow.config import RegressionDataConfig
+from tpflow.processing import auto_block_sizes, extract_regression_pairs, open_zarr_array
 from tpflow.util import init_wandb, log_duration
-
-
-def _auto_block_sizes(
-    state_shape: tuple, n_time: int, target_mb: float = 2.0
-) -> tuple[int, int]:
-    """Return (block_size, trajectory_block_size) targeting ~target_mb per chunk."""
-    target_bytes = int(target_mb * 1024 * 1024)
-    bytes_per_sample = max(1, math.prod(state_shape)) * 4  # f4 output dtype
-    block_size = max(1, target_bytes // bytes_per_sample)
-    traj_block_size = max(1, target_bytes // (n_time * bytes_per_sample))
-    return block_size, traj_block_size
-
-
-def _get_array(
-    group: zarr.Group,
-    name: str,
-    size: int | None = None,
-) -> zarr.Array | np.ndarray:
-    if name not in group:
-        if size is not None:
-            return np.ones((size,))
-        raise KeyError(f"'{name}' not found in group and no size provided")
-    obj = group[name]
-    if not isinstance(obj, zarr.Array):
-        raise TypeError(f"'{name}' is not a zarr.Array")
-    return obj
 
 
 def _make_outfile(
@@ -90,15 +64,15 @@ def _process(
     input: str, output: str, block_size: int, trajectory_block_size: int
 ) -> int:
     infile = cast(zarr.Group, zarr.open(input, mode="r"))
-    indata = _get_array(infile, "data")
-    inparam = _get_array(infile, "param", indata.shape[0])
+    indata = open_zarr_array(infile, "data")
+    inparam = open_zarr_array(infile, "param", indata.shape[0])
 
     n_traj, n_time = indata.shape[:2]
     state_shape = indata.shape[2:]
     n_steps = n_time - 1
     n_samples = n_traj * n_steps
 
-    auto_bs, auto_tbs = _auto_block_sizes(state_shape, n_time)
+    auto_bs, auto_tbs = auto_block_sizes(state_shape, n_time)
     block_size = block_size or auto_bs
     trajectory_block_size = trajectory_block_size or auto_tbs
     logging.info(
@@ -121,17 +95,13 @@ def _process(
         desc="Processing trajectories",
     ):
         traj_end = min(traj_start + trajectory_block_size, n_traj)
-        block = traj_end - traj_start
 
-        data_block = np.array(
-            indata[traj_start:traj_end]
-        )  # (block, n_time, *state_shape)
+        data_block = np.array(indata[traj_start:traj_end])  # (block, n_time, *state_shape)
         param_block = np.array(inparam[traj_start:traj_end])  # (block,)
 
-        cur = data_block[:, :-1].reshape(block * n_steps, *state_shape)
-        nxt = data_block[:, 1:].reshape(block * n_steps, *state_shape)
-        time_flat = np.tile(time_vector[:-1], block)
-        param_flat = np.repeat(param_block, n_steps)
+        cur, nxt, time_flat, param_flat = extract_regression_pairs(
+            data_block, time_vector, param_block
+        )
 
         diff = nxt - cur
         sum_diff += float(np.sum(diff))
