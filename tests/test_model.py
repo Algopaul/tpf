@@ -20,8 +20,8 @@ from tpflow.model import (
     RegressionDec,
     _save_checkpoint,
     flow_inference,
-    load_regression_model,
     load_model,
+    load_regression_model,
     make_flow_fn,
 )
 
@@ -38,7 +38,9 @@ N_ODE_STEPS = 2  # keep tests fast
 
 @pytest.fixture(scope="module")
 def cfm_model():
-    cfg = MLPConfig(features_in=STATE_DIM + 2, features_out=STATE_DIM, features_inner=8, layers=2)
+    cfg = MLPConfig(
+        features_in=STATE_DIM + 2, features_out=STATE_DIM, features_inner=8, layers=2
+    )
     model = CFMDec(EmbMLP.from_config(cfg, rngs=nnx.Rngs(0)))
     model.eval()
     return model
@@ -46,8 +48,12 @@ def cfm_model():
 
 @pytest.fixture(scope="module")
 def regression_model():
-    cfg = MLPConfig(features_in=STATE_DIM + 2, features_out=STATE_DIM, features_inner=8, layers=2)
-    model = RegressionDec(EmbMLP.from_config(cfg, rngs=nnx.Rngs(0)), time_conditioned=True)
+    cfg = MLPConfig(
+        features_in=STATE_DIM + 2, features_out=STATE_DIM, features_inner=8, layers=2
+    )
+    model = RegressionDec(
+        EmbMLP.from_config(cfg, rngs=nnx.Rngs(0)), time_conditioned=True
+    )
     model.eval()
     return model
 
@@ -65,6 +71,7 @@ def cslist():
 # ---------------------------------------------------------------------------
 # make_flow_fn and flow_inference produce the same outputs
 # ---------------------------------------------------------------------------
+
 
 def test_make_flow_fn_matches_flow_inference(cfm_model, source_batch, cslist):
     """make_flow_fn (lax.map) and flow_inference (Python loop) must agree."""
@@ -86,19 +93,30 @@ def test_make_flow_fn_output_shape(cfm_model, source_batch, cslist):
 # _save_checkpoint / load roundtrip
 # ---------------------------------------------------------------------------
 
+
 def _tiny_cfm_cfg():
     """Return a minimal CFMTraining-like object (namespace, no Hydra needed)."""
     from types import SimpleNamespace
-    mlp_cfg = MLPConfig(features_in=STATE_DIM + 2, features_out=STATE_DIM, features_inner=8, layers=2)
-    return SimpleNamespace(model_type="mlp", mlp=mlp_cfg, data=SimpleNamespace(name="test"))
+
+    mlp_cfg = MLPConfig(
+        features_in=STATE_DIM + 2, features_out=STATE_DIM, features_inner=8, layers=2
+    )
+    return SimpleNamespace(
+        model_type="mlp", mlp=mlp_cfg, data=SimpleNamespace(name="test")
+    )
 
 
 def _tiny_regression_cfg():
     from types import SimpleNamespace
-    mlp_cfg = MLPConfig(features_in=STATE_DIM + 2, features_out=STATE_DIM, features_inner=8, layers=2)
+
+    mlp_cfg = MLPConfig(
+        features_in=STATE_DIM + 2, features_out=STATE_DIM, features_inner=8, layers=2
+    )
     return SimpleNamespace(
-        model_type="mlp", mlp=mlp_cfg,
-        time_conditioned=True, mode="step",
+        model_type="mlp",
+        mlp=mlp_cfg,
+        time_conditioned=True,
+        mode="step",
     )
 
 
@@ -110,7 +128,14 @@ def test_save_and_load_cfm_model_roundtrip(tmp_path, cfm_model):
         "sample_shape": [STATE_DIM],
         "epoch": 1,
     }
-    _save_checkpoint(cfm_model, cfg, epoch=1, sample_shape=(STATE_DIM,), info=info, output_dir=tmp_path)
+    _save_checkpoint(
+        cfm_model,
+        cfg,
+        epoch=1,
+        sample_shape=(STATE_DIM,),
+        info=info,
+        output_dir=tmp_path,
+    )
 
     loaded = load_model(tmp_path / "1")
 
@@ -133,7 +158,14 @@ def test_save_and_load_regression_model_roundtrip(tmp_path, regression_model):
         "sample_shape": [STATE_DIM],
         "epoch": 1,
     }
-    _save_checkpoint(regression_model, cfg, epoch=1, sample_shape=(STATE_DIM,), info=info, output_dir=tmp_path)
+    _save_checkpoint(
+        regression_model,
+        cfg,
+        epoch=1,
+        sample_shape=(STATE_DIM,),
+        info=info,
+        output_dir=tmp_path,
+    )
 
     loaded = load_regression_model(tmp_path / "1")
 
@@ -149,8 +181,20 @@ def test_save_and_load_regression_model_roundtrip(tmp_path, regression_model):
 
 def test_save_checkpoint_writes_expected_files(tmp_path, cfm_model):
     cfg = _tiny_cfm_cfg()
-    info = {"model_type": "mlp", "epoch": 1, "sample_shape": [STATE_DIM], "data_name": "test"}
-    _save_checkpoint(cfm_model, cfg, epoch=1, sample_shape=(STATE_DIM,), info=info, output_dir=tmp_path)
+    info = {
+        "model_type": "mlp",
+        "epoch": 1,
+        "sample_shape": [STATE_DIM],
+        "data_name": "test",
+    }
+    _save_checkpoint(
+        cfm_model,
+        cfg,
+        epoch=1,
+        sample_shape=(STATE_DIM,),
+        info=info,
+        output_dir=tmp_path,
+    )
 
     checkpoint_dir = tmp_path / "1"
     assert (checkpoint_dir / "config.yaml").exists()

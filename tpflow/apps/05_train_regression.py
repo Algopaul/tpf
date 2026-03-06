@@ -8,8 +8,8 @@ in 02_train_cfm.
 Two prediction modes:
   step       -- minimises  ||model(x, t, p) - x_next||
   difference -- minimises  ||model(x, t, p) - (x_next - x) / diff_scale||
-               rollout is a forward-Euler step: x_{t+1} = x_t + diff_scale * model(x_t, t, p)
-               diff_scale = std(x_next - x) over the training set (stored as zarr attribute)
+               rollout: x_{t+1} = x_t + diff_scale * model(x_t, t, p)
+               diff_scale = std(x_next - x) over training set (zarr attribute)
 
 Two conditioning modes (set via time_conditioned):
   True  -- model receives (x, t, p) as input   (architecture input size n+2)
@@ -30,6 +30,7 @@ import hydra
 import jax
 import jax.numpy as jnp
 import jax.random as jrd
+import matplotlib.pyplot as plt
 import numpy as np
 from flanch import Recorder, get_optimizer
 from flanch.optimizer import get_train_step
@@ -38,7 +39,6 @@ from hdfv.images import frame_rgb, grid_shape
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
-import matplotlib.pyplot as plt
 import wandb
 from tpflow.config import RegressionTraining
 from tpflow.data import RegressionZarrData, device_prefetch, get_regression_val_data
@@ -162,7 +162,9 @@ def main(cfg: RegressionTraining) -> None:
 def _log_rollout_eval(
     model, cfg: RegressionTraining, run, step: int, diff_scale: float = 1.0
 ):
-    traj_data, traj_param, time_vector = load_trajectory_zarr(cfg.rollout_data, n=cfg.n_rollout)
+    traj_data, traj_param, time_vector = load_trajectory_zarr(
+        cfg.rollout_data, n=cfg.n_rollout
+    )
 
     x0 = jnp.array(traj_data[:, 0])  # (n_rollout, *state_shape)
     param = jnp.array(traj_param[:, None])  # (n_rollout, 1)
@@ -188,7 +190,9 @@ def _log_rollout_eval(
     rollout_stats = trajectory_statistics(out)
     ref_stats = trajectory_statistics(ref)
     for stat_name in rollout_stats:
-        fig = _stats_figure(stat_name, rollout_stats[stat_name], ref_stats[stat_name], time_vector)
+        fig = _stats_figure(
+            stat_name, rollout_stats[stat_name], ref_stats[stat_name], time_vector
+        )
         run.log({f"eval/{stat_name}": wandb.Image(fig)}, step=step)
         plt.close(fig)
 

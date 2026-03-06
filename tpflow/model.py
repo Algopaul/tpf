@@ -145,7 +145,9 @@ def get_regression_model(cfg: RegressionTraining, rngs=None):
             raise ValueError(f"model_type {cfg.model_type!r} not supported")
 
 
-def regression_rollout(model, x0, time_vector, param, mode: str, diff_scale: float = 1.0):
+def regression_rollout(
+    model, x0, time_vector, param, mode: str, diff_scale: float = 1.0
+):
     """Roll out a one-step regression model from initial conditions.
 
     Args:
@@ -214,13 +216,20 @@ def store_regression_model(
 ):
     run_dir = HydraConfig.get().runtime.output_dir
     logging.info("Storing regression model at %s", run_dir)
-    _save_checkpoint(model, cfg, epoch, sample_shape, output_dir=run_dir, info={
-        "model_type": cfg.model_type,
-        "time_conditioned": cfg.time_conditioned,
-        "mode": cfg.mode,
-        "sample_shape": list(sample_shape),
-        "epoch": epoch,
-    })
+    _save_checkpoint(
+        model,
+        cfg,
+        epoch,
+        sample_shape,
+        output_dir=run_dir,
+        info={
+            "model_type": cfg.model_type,
+            "time_conditioned": cfg.time_conditioned,
+            "mode": cfg.mode,
+            "sample_shape": list(sample_shape),
+            "epoch": epoch,
+        },
+    )
 
 
 def load_regression_model(checkpoint_dir: str | Path):
@@ -299,9 +308,16 @@ def load_model(checkpoint_dir: str | Path):
 def store_model(model, cfg, epoch, sample_shape: tuple):
     run_dir = HydraConfig.get().runtime.output_dir
     logging.info("Storing model at %s", run_dir)
-    _save_checkpoint(model, cfg, epoch, sample_shape, output_dir=run_dir, info={
-        "model_type": cfg.model_type,
-        "data_name": cfg.data.name,
-        "sample_shape": list(sample_shape),
-        "epoch": epoch,
-    })
+    _save_checkpoint(
+        model,
+        cfg,
+        epoch,
+        sample_shape,
+        output_dir=run_dir,
+        info={
+            "model_type": cfg.model_type,
+            "data_name": cfg.data.name,
+            "sample_shape": list(sample_shape),
+            "epoch": epoch,
+        },
+    )

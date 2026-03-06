@@ -15,10 +15,10 @@ from tpflow.processing import (
     open_zarr_array,
 )
 
-
 # ---------------------------------------------------------------------------
 # open_zarr_array
 # ---------------------------------------------------------------------------
+
 
 def test_open_zarr_array_returns_array_when_present():
     g = zarr.group()
@@ -49,6 +49,7 @@ def test_open_zarr_array_raises_type_error_when_name_is_a_subgroup():
 # auto_block_sizes
 # ---------------------------------------------------------------------------
 
+
 def test_auto_block_sizes_returns_positive_ints():
     bs, tbs = auto_block_sizes(state_shape=(8,), n_time=10)
     assert isinstance(bs, int) and bs > 0
@@ -78,6 +79,7 @@ def test_auto_block_sizes_scalar_state_shape_does_not_crash():
 
 # 3 trajectories, 4 timesteps, state shape (2,) → n_samples = 3 * 3 = 9.
 
+
 @pytest.fixture
 def pairs():
     rng = np.random.default_rng(0)
@@ -85,8 +87,15 @@ def pairs():
     time = np.array([0.0, 0.25, 0.5, 0.75])
     param = np.array([1.0, 2.0, 3.0])
     cur, nxt, time_flat, param_flat = extract_regression_pairs(data, time, param)
-    return dict(data=data, time=time, param=param,
-                cur=cur, nxt=nxt, time_flat=time_flat, param_flat=param_flat)
+    return dict(
+        data=data,
+        time=time,
+        param=param,
+        cur=cur,
+        nxt=nxt,
+        time_flat=time_flat,
+        param_flat=param_flat,
+    )
 
 
 def test_extract_regression_pairs_output_shapes(pairs):
@@ -122,11 +131,16 @@ def test_extract_regression_pairs_param_flat_repeats_per_trajectory(pairs):
 # load_trajectory_zarr
 # ---------------------------------------------------------------------------
 
-def _make_trajectory_zarr(tmp_path, n_traj=5, n_time=10, state_shape=(3,), with_param=True, with_time=True):
+
+def _make_trajectory_zarr(
+    tmp_path, n_traj=5, n_time=10, state_shape=(3,), with_param=True, with_time=True
+):
     path = str(tmp_path / "traj.zarr")
     g = zarr.open_group(path, mode="w")
     rng = np.random.default_rng(1)
-    g.create_array("data", data=rng.standard_normal((n_traj, n_time, *state_shape)).astype("f4"))
+    g.create_array(
+        "data", data=rng.standard_normal((n_traj, n_time, *state_shape)).astype("f4")
+    )
     if with_param:
         g.create_array("param", data=rng.standard_normal((n_traj,)).astype("f4"))
     if with_time:

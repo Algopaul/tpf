@@ -35,7 +35,11 @@ from omegaconf import OmegaConf
 from tqdm import tqdm
 
 from tpflow.config import RegressionDataConfig
-from tpflow.processing import auto_block_sizes, extract_regression_pairs, open_zarr_array
+from tpflow.processing import (
+    auto_block_sizes,
+    extract_regression_pairs,
+    open_zarr_array,
+)
 from tpflow.util import init_wandb, log_duration
 
 
@@ -96,7 +100,9 @@ def _process(
     ):
         traj_end = min(traj_start + trajectory_block_size, n_traj)
 
-        data_block = np.array(indata[traj_start:traj_end])  # (block, n_time, *state_shape)
+        data_block = np.array(
+            indata[traj_start:traj_end]
+        )  # (block, n_time, *state_shape)
         param_block = np.array(inparam[traj_start:traj_end])  # (block,)
 
         cur, nxt, time_flat, param_flat = extract_regression_pairs(
