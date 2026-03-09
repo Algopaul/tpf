@@ -11,7 +11,9 @@ import pytest
 from tpflow.statistics import (
     _dy,
     _laplacian,
+    energy_spectra,
     enstrophy,
+    first_moment,
     hw2d_energy,
     hw2d_enstrophy,
     hw2d_gamma_c,
@@ -56,12 +58,126 @@ def test_kurtosis_constant_field_is_minus_three():
     np.testing.assert_allclose(kurtosis(traj), -3.0)
 
 
-def test_trajectory_statistics_returns_both_keys():
+def test_trajectory_statistics_returns_all_keys():
     traj = np.ones((4, 2, 6))
     stats = trajectory_statistics(traj)
+    assert "first_moment" in stats
     assert "enstrophy" in stats
     assert "kurtosis" in stats
     assert stats["enstrophy"].shape == (4, 2)
+    assert stats["first_moment"].shape == (4, 2)
+
+
+# ---------------------------------------------------------------------------
+# first_moment
+# ---------------------------------------------------------------------------
+
+
+def test_first_moment_output_shape():
+    traj = np.ones((5, 3, 4, 4))
+    out = first_moment(traj)
+    assert out.shape == (5, 3)
+
+
+def test_first_moment_constant_field():
+    # field = c  →  mean(c) = c
+    traj = np.full((2, 3, 8, 8), 3.0)
+    np.testing.assert_allclose(first_moment(traj), 3.0)
+
+
+def test_first_moment_zero_mean_field():
+    # antisymmetric field has mean 0
+    traj = np.array([1.0, -1.0, 1.0, -1.0]).reshape(1, 1, 4)
+    np.testing.assert_allclose(first_moment(traj), 0.0, atol=1e-15)
+
+
+# ---------------------------------------------------------------------------
+# energy_spectra
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def field_traj():
+    """(n_time=3, n_rollout=2, H=32, W=32) field trajectory."""
+    rng = np.random.default_rng(42)
+    return rng.standard_normal((3, 2, 32, 32))
+
+
+@pytest.fixture(scope="module")
+def field_traj_chan():
+    """(n_time=3, n_rollout=2, H=32, W=32, C=2) channels-last trajectory."""
+    rng = np.random.default_rng(43)
+    return rng.standard_normal((3, 2, 32, 32, 2))
+
+
+def test_energy_spectra_output_shapes(field_traj):
+    bin_centers, spectra = energy_spectra(field_traj, n_bins=16)
+    assert bin_centers.shape == (16,)
+    assert spectra.shape == (3, 2, 16)
+
+
+def test_energy_spectra_log_bins_output_shapes(field_traj):
+    bin_centers, spectra = energy_spectra(field_traj, n_bins=16, log_bins=True)
+    assert bin_centers.shape == (16,)
+    assert spectra.shape == (3, 2, 16)
+
+
+def test_energy_spectra_bin_centers_positive(field_traj):
+    bin_centers, _ = energy_spectra(field_traj, n_bins=16)
+    assert np.all(bin_centers > 0)
+
+
+def test_energy_spectra_log_bins_centers_monotone(field_traj):
+    bin_centers, _ = energy_spectra(field_traj, n_bins=16, log_bins=True)
+    assert np.all(np.diff(bin_centers) > 0)
+
+
+def test_energy_spectra_log_bins_centers_log_spaced(field_traj):
+    # Ratios of consecutive centres should be approximately constant
+    bin_centers, _ = energy_spectra(field_traj, n_bins=16, log_bins=True)
+    ratios = bin_centers[1:] / bin_centers[:-1]
+    np.testing.assert_allclose(ratios, ratios[0], rtol=0.05)
+
+
+def test_energy_spectra_spectra_non_negative(field_traj):
+    _, spectra = energy_spectra(field_traj, n_bins=16)
+    assert np.all(spectra >= 0)
+
+
+def test_energy_spectra_total_power_parseval(field_traj):
+    # Sum of spectral bins ≈ mean(field²) / N² * N² = mean(field²)  up to binning edge effects
+    # More precisely: sum(|F̂|²) / N² = mean(field²) by Parseval
+    _, spectra = energy_spectra(field_traj, n_bins=256)
+    for ti in range(3):
+        for ri in range(2):
+            field = field_traj[ti, ri]
+            expected = np.mean(field**2)
+            got = np.sum(spectra[ti, ri])
+            np.testing.assert_allclose(got, expected, rtol=1e-6)
+
+
+def test_energy_spectra_channel_axis_selects_correct_channel(field_traj_chan):
+    # Extracting channel 0 via channel_axis=-1 should match computing directly on chan 0
+    _, spectra_ch0 = energy_spectra(
+        field_traj_chan, n_bins=16, channel_axis=-1, channel_idx=0
+    )
+    _, spectra_direct = energy_spectra(
+        field_traj_chan[..., 0], n_bins=16, channel_axis=None
+    )
+    np.testing.assert_allclose(spectra_ch0, spectra_direct)
+
+
+def test_energy_spectra_channel_axis_negative_index(field_traj_chan):
+    # channel_axis=-1 and channel_axis=2 (last of 3 state dims H,W,C) are equivalent
+    _, s1 = energy_spectra(field_traj_chan, n_bins=8, channel_axis=-1, channel_idx=1)
+    _, s2 = energy_spectra(field_traj_chan, n_bins=8, channel_axis=2, channel_idx=1)
+    np.testing.assert_array_equal(s1, s2)
+
+
+def test_energy_spectra_raises_without_channel_axis_for_3d_state():
+    traj = np.ones((2, 2, 8, 8, 2))  # 5-D, needs channel selection
+    with pytest.raises(ValueError, match="channel_axis"):
+        energy_spectra(traj, channel_axis=None)
 
 
 # ---------------------------------------------------------------------------

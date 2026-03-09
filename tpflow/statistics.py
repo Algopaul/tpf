@@ -47,8 +47,111 @@ def kurtosis(trajectories: np.ndarray) -> np.ndarray:
     return np.mean(z**4, axis=-1) - 3.0
 
 
+def first_moment(trajectories: np.ndarray) -> np.ndarray:
+    """Mean state value per sample at each time step (first moment).
+
+    Flattens all state dimensions and computes the arithmetic mean. For
+    vorticity fields on a periodic domain this quantity is conserved and
+    should stay near zero; deviations indicate a systematic bias.
+
+    Args:
+        trajectories: ``(n_time, n_rollout, *state_shape)``
+
+    Returns:
+        ``(n_time, n_rollout)``
+    """
+    n_time, n_rollout = trajectories.shape[:2]
+    flat = trajectories.reshape(n_time, n_rollout, -1)
+    return np.mean(flat, axis=-1)
+
+
+def energy_spectra(
+    trajectories: np.ndarray,
+    n_bins: int = 32,
+    log_bins: bool = False,
+    channel_axis: int | None = None,
+    channel_idx: int = 0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Radially-averaged power spectrum of a 2-D field trajectory ensemble.
+
+    The state is assumed to be a 2-D periodic field ``(H, W)`` after optional
+    channel selection. The discrete Fourier power ``|F̂|²`` is accumulated into
+    radial wavenumber bins (linear or logarithmic spacing).
+
+    Args:
+        trajectories: ``(n_time, n_rollout, *state_shape)``
+        n_bins: number of wavenumber bins.
+        log_bins: if True, bin edges are logarithmically spaced from the
+            smallest non-zero wavenumber to the Nyquist limit; otherwise
+            linearly spaced from zero.
+        channel_axis: axis index within *state_shape* (0-based, negative
+            indices allowed) of the channel dimension. When ``None`` the state
+            is assumed to be exactly 2-D ``(H, W)``.
+        channel_idx: which channel to select when *channel_axis* is not None.
+
+    Returns:
+        bin_centers: ``(n_bins,)`` wavenumber bin centres (same units as
+            ``np.fft.fftfreq`` with ``d=1/N``, i.e. cycles per grid point
+            multiplied by grid size).
+        spectra: ``(n_time, n_rollout, n_bins)`` total power in each bin.
+    """
+    n_time, n_rollout = trajectories.shape[:2]
+
+    if channel_axis is not None:
+        ndim_state = trajectories.ndim - 2
+        full_axis = 2 + (channel_axis % ndim_state)
+        field = np.take(trajectories, channel_idx, axis=full_axis)
+    else:
+        field = trajectories
+
+    if field.ndim != 4:
+        raise ValueError(
+            f"After channel selection the field must be 4-D "
+            f"(n_time, n_rollout, H, W); got shape {field.shape}. "
+            "Pass channel_axis to select a 2-D slice from the state."
+        )
+
+    H, W = field.shape[2], field.shape[3]
+    field = field.astype(np.float64)
+
+    # 2-D FFT power spectrum, normalised by N² so amplitude is grid-size independent
+    f_hat = np.fft.fft2(field)  # (n_time, n_rollout, H, W)
+    power = (np.abs(f_hat) ** 2) / (H * W) ** 2
+
+    # Radial wavenumber grid (cycles per grid point × grid size = integer wavenumbers)
+    ky = np.fft.fftfreq(H, d=1.0 / H)  # (H,)
+    kx = np.fft.fftfreq(W, d=1.0 / W)  # (W,)
+    KX, KY = np.meshgrid(kx, ky)        # (H, W)
+    K = np.sqrt(KX**2 + KY**2)          # (H, W)
+
+    k_max = float(K.max())
+    K_flat = K.ravel()  # (H*W,)
+
+    # Bin edges
+    if log_bins:
+        k_min = float(K[K > 0].min()) if (K > 0).any() else 1.0
+        bin_edges = np.geomspace(k_min, k_max, n_bins + 1)
+    else:
+        bin_edges = np.linspace(0.0, k_max, n_bins + 1)
+
+    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+
+    # Map each grid point to a bin; clip so the rightmost edge lands in the last bin
+    bin_indices = np.clip(np.digitize(K_flat, bin_edges) - 1, 0, n_bins - 1)
+
+    # Accumulate power into bins
+    power_flat = power.reshape(n_time * n_rollout, H * W)
+    raw_spectra = np.zeros((n_time * n_rollout, n_bins))
+    for i in range(n_time * n_rollout):
+        raw_spectra[i] = np.bincount(
+            bin_indices, weights=power_flat[i], minlength=n_bins
+        )
+
+    return bin_centers, raw_spectra.reshape(n_time, n_rollout, n_bins)
+
+
 def trajectory_statistics(trajectories: np.ndarray) -> dict[str, np.ndarray]:
-    """Compute all statistics for a trajectory ensemble.
+    """Compute scalar statistics for a trajectory ensemble.
 
     Args:
         trajectories: ``(n_time, n_rollout, *state_shape)``
@@ -57,6 +160,7 @@ def trajectory_statistics(trajectories: np.ndarray) -> dict[str, np.ndarray]:
         Dict mapping statistic name to ``(n_time, n_rollout)`` array.
     """
     return {
+        "first_moment": first_moment(trajectories),
         "enstrophy": enstrophy(trajectories),
         "kurtosis": kurtosis(trajectories),
     }
