@@ -75,11 +75,13 @@ def main(cfg: TrajectoryProcessing) -> None:
 
 def make_outfile(name, n_samples, block_size, sample_shape):
     outfile = zarr.create_group(name, overwrite=True)
-    # f8 dtype in app 01 → 8 bytes per scalar value; only shard when dataset
-    # is large enough to produce at least 2 shards (avoids overhead for tiny data).
+    # f8 dtype in app 01 → 8 bytes per scalar value.
+    # Shard whenever n_samples > block_size (i.e. more than one inner chunk).
+    # Small test splits produce one shard file; unit-test arrays (n_samples ≤
+    # block_size) skip sharding entirely to avoid codec overhead.
     n_bps = auto_blocks_per_shard(block_size, sample_shape, dtype_itemsize=8)
     shard_size = n_bps * block_size
-    use_shards = shard_size < n_samples
+    use_shards = n_samples > block_size
     logging.info(
         "shard_size=%d samples (%.1f GB)%s",
         shard_size,

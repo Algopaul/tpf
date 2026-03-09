@@ -51,14 +51,16 @@ def _make_outfile(
 ) -> zarr.Group:
     outfile = zarr.open_group(path, mode="w")
     # f4 dtype → 4 bytes per scalar; target ~1 GB per shard file.
-    # Only shard when dataset is large enough to produce at least 2 shards.
+    # Shard whenever n_samples > block_size (more than one inner chunk).
+    # Small test splits produce one shard file; unit-test arrays (n_samples ≤
+    # block_size) skip sharding entirely to avoid codec overhead.
     n_bps = auto_blocks_per_shard(block_size, state_shape, dtype_itemsize=4)
     shard_size = n_bps * block_size
-    use_shards = shard_size < n_samples
+    use_shards = n_samples > block_size
     logging.info(
         "shard_size=%d samples%s",
         shard_size,
-        "" if use_shards else " — skipped, dataset fits in one shard",
+        "" if use_shards else " — skipped, dataset fits in one chunk",
     )
     data_kw = {"shards": (shard_size, *state_shape)} if use_shards else {}
     scalar_kw = {"shards": (shard_size,)} if use_shards else {}
