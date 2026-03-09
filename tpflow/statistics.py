@@ -202,7 +202,7 @@ def hw2d_statistics(
     Returns:
         Dict mapping statistic name to ``(n_time, n_rollout)`` array.
     """
-    n = trajectories[..., n_channel].astype(np.float64)    # (n_time, n_rollout, H, W)
+    n = trajectories[..., n_channel].astype(np.float64)  # (n_time, n_rollout, H, W)
     phi = trajectories[..., phi_channel].astype(np.float64)
     return {
         "gamma_n": hw2d_gamma_n(n, phi),

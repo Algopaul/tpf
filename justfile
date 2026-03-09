@@ -135,4 +135,4 @@ hw2d-data extras:
   {{process}} {{process_defaults}} data.name=hw2d {{extras}}
 
 hw2d-cfm extras:
-  {{train_cfm}} {{field_cfm_defaults}} data.name=hw2d unet.base_ch=32,64 {{extras}}
+  {{train_cfm}} {{field_cfm_defaults}} data.name=hw2d unet.base_ch=32,64 unet.channels_inout=2 {{extras}}

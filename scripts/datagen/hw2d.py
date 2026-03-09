@@ -39,20 +39,20 @@ class HW2DConfig:
     # ── hw2d physics parameters ────────────────────────────────────────────
     step_size: float = 0.025
     end_time: float = 200.0
-    grid_pts: int = 256       # simulation grid; downsampled before storing
+    grid_pts: int = 256  # simulation grid; downsampled before storing
     c1: float = 1.0
     k0: float = 0.15
     N: int = 3
     nu: float = 5.0e-8
     buffer_length: int = 100  # HDF5 write buffer (not snapshot interval)
-    snaps: int = 1            # 1 = save every simulation step
+    snaps: int = 1  # 1 = save every simulation step
     downsample_factor: int = 2  # spatial: grid_pts → grid_pts // factor
 
     # ── dataset parameters ─────────────────────────────────────────────────
     seed: int = 0
     split: str = "train"
-    n_seeds: int = 1000       # total seeds; used to pre-allocate zarr shape
-    time_stride: int = 20     # keep every N-th snapshot (401 out of 8001)
+    n_seeds: int = 1000  # total seeds; used to pre-allocate zarr shape
+    time_stride: int = 20  # keep every N-th snapshot (401 out of 8001)
 
     # ── output ─────────────────────────────────────────────────────────────
     output_dir: str = "data/datasets/hw2d/raw_trajectories"
@@ -102,7 +102,9 @@ def main(cfg: HW2DConfig) -> None:
         # Run hw2d using the same Python interpreter (respects .venv).
         subprocess.run(
             [
-                sys.executable, "-m", "hw2d",
+                sys.executable,
+                "-m",
+                "hw2d",
                 f"--step_size={cfg.step_size}",
                 f"--end_time={cfg.end_time}",
                 f"--grid_pts={cfg.grid_pts}",

@@ -72,6 +72,7 @@ def main(cfg: TrajectoryProcessing) -> None:
                 outfile["time"][sample_start:sample_end] = flat_time  # pyright: ignore[reportArgumentType]
                 outfile["param"][sample_start:sample_end] = flat_param  # pyright: ignore[reportArgumentType]
 
+
 def make_outfile(name, n_samples, block_size, blocks_per_shard, sample_shape):
     outfile = zarr.create_group(name, overwrite=True)
     shard_size = blocks_per_shard * block_size

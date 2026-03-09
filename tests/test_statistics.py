@@ -75,9 +75,7 @@ def test_dy_of_sine_is_cosine():
     N = 64
     y = np.linspace(0, 1, N, endpoint=False)
     f2d = np.tile(np.sin(2 * np.pi * y)[:, None], (1, N))  # (N, N) varies along rows
-    df_expected = np.tile(
-        (2 * np.pi * np.cos(2 * np.pi * y))[:, None], (1, N)
-    )
+    df_expected = np.tile((2 * np.pi * np.cos(2 * np.pi * y))[:, None], (1, N))
     df = _dy(f2d)
     np.testing.assert_allclose(df, df_expected, atol=1e-10)
 
@@ -87,7 +85,7 @@ def test_laplacian_of_cosine():
     N = 64
     y = np.linspace(0, 1, N, endpoint=False)
     f2d = np.tile(np.cos(2 * np.pi * y)[:, None], (1, N))  # (N, N)
-    lap_expected = -(2 * np.pi) ** 2 * f2d
+    lap_expected = -((2 * np.pi) ** 2) * f2d
     lap = _laplacian(f2d)
     np.testing.assert_allclose(lap, lap_expected, atol=1e-8)
 

@@ -120,7 +120,9 @@ class ZarrData:
                     block_buffer[f].append(shard[f][bs:be])
                 n_buffered += 1
                 if n_buffered == self._blocks_per_batch:
-                    yield {f: np.concatenate(block_buffer[f], axis=0) for f in self._fields}
+                    yield {
+                        f: np.concatenate(block_buffer[f], axis=0) for f in self._fields
+                    }
                     block_buffer = {f: [] for f in self._fields}
                     n_buffered = 0
                     batches_yielded += 1
@@ -182,7 +184,9 @@ class RegressionZarrData:
                     block_buffer[f].append(shard[f][bs:be])
                 n_buffered += 1
                 if n_buffered == self._blocks_per_batch:
-                    yield {f: np.concatenate(block_buffer[f], axis=0) for f in self._FIELDS}
+                    yield {
+                        f: np.concatenate(block_buffer[f], axis=0) for f in self._FIELDS
+                    }
                     block_buffer = {f: [] for f in self._FIELDS}
                     n_buffered = 0
                     batches_yielded += 1

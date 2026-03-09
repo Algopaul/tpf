@@ -43,7 +43,11 @@ from tpflow.util import init_wandb, log_duration
 
 
 def _make_outfile(
-    path: str, n_samples: int, block_size: int, blocks_per_shard: int, state_shape: tuple
+    path: str,
+    n_samples: int,
+    block_size: int,
+    blocks_per_shard: int,
+    state_shape: tuple,
 ) -> zarr.Group:
     outfile = zarr.open_group(path, mode="w")
     shard_size = blocks_per_shard * block_size
@@ -62,16 +66,28 @@ def _make_outfile(
         dtype="f4",
     )
     outfile.create_array(
-        "time", shape=(n_samples,), chunks=(block_size,), shards=(shard_size,), dtype="f8"
+        "time",
+        shape=(n_samples,),
+        chunks=(block_size,),
+        shards=(shard_size,),
+        dtype="f8",
     )
     outfile.create_array(
-        "param", shape=(n_samples,), chunks=(block_size,), shards=(shard_size,), dtype="f8"
+        "param",
+        shape=(n_samples,),
+        chunks=(block_size,),
+        shards=(shard_size,),
+        dtype="f8",
     )
     return outfile
 
 
 def _process(
-    input: str, output: str, block_size: int, blocks_per_shard: int, trajectory_block_size: int
+    input: str,
+    output: str,
+    block_size: int,
+    blocks_per_shard: int,
+    trajectory_block_size: int,
 ) -> int:
     infile = cast(zarr.Group, zarr.open(input, mode="r"))
     indata = open_zarr_array(infile, "data")
@@ -94,7 +110,9 @@ def _process(
     else:
         time_vector = np.arange(n_time, dtype=np.float64)
 
-    outfile = _make_outfile(output, n_samples, block_size, blocks_per_shard, state_shape)
+    outfile = _make_outfile(
+        output, n_samples, block_size, blocks_per_shard, state_shape
+    )
 
     sum_diff = 0.0
     sum_sq_diff = 0.0
@@ -140,7 +158,11 @@ def main(cfg: RegressionDataConfig) -> None:
     logging.info("\n%s", OmegaConf.to_yaml(cfg))
     with init_wandb(cfg, "regression-data"):
         _process(
-            cfg.input, cfg.output, cfg.block_size, cfg.blocks_per_shard, cfg.trajectory_block_size
+            cfg.input,
+            cfg.output,
+            cfg.block_size,
+            cfg.blocks_per_shard,
+            cfg.trajectory_block_size,
         )
         logging.info("Saved regression data to %s", cfg.output)
 
