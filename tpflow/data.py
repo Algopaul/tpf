@@ -1,6 +1,7 @@
 import io
 import json
 import os
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import cast
 
 import jax
@@ -66,6 +67,30 @@ def get_data(cfg: DataConfig, split):
     return batch_list
 
 
+def _prefetch_shards(
+    arrays: dict[str, zarr.Array],
+    shard_order: np.ndarray,
+    shard_size: int,
+):
+    """Iterate shards, loading the next one in a background thread while the
+    caller processes the current one.  Yields one shard dict per iteration."""
+    fields = list(arrays.keys())
+
+    def _load(idx: int) -> dict[str, np.ndarray]:
+        start = idx * shard_size
+        end = start + shard_size
+        return {f: np.array(arrays[f][start:end]) for f in fields}  # pyright: ignore[reportArgumentType]
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future: Future[dict[str, np.ndarray]] | None = pool.submit(_load, int(shard_order[0]))
+        for i, shard_idx in enumerate(shard_order):
+            shard = future.result()
+            # Kick off next load before yielding, so I/O overlaps with training
+            if i + 1 < len(shard_order):
+                future = pool.submit(_load, int(shard_order[i + 1]))
+            yield shard  # type: ignore[misc]
+
+
 class ZarrData:
     """Block-shuffled dataloader for sharded zarr CFM training data.
 
@@ -109,11 +134,7 @@ class ZarrData:
         n_buffered = 0
         batches_yielded = 0
 
-        for shard_idx in shard_order:
-            start = int(shard_idx) * self._shard_size
-            end = start + self._shard_size
-            shard = {f: np.array(self._arrays[f][start:end]) for f in self._fields}  # pyright: ignore[reportArgumentType]
-
+        for shard in _prefetch_shards(self._arrays, shard_order, self._shard_size):
             for b in rng.permutation(self._blocks_per_shard):
                 bs, be = int(b) * self._block_size, (int(b) + 1) * self._block_size
                 for f in self._fields:
@@ -173,11 +194,7 @@ class RegressionZarrData:
         n_buffered = 0
         batches_yielded = 0
 
-        for shard_idx in shard_order:
-            start = int(shard_idx) * self._shard_size
-            end = start + self._shard_size
-            shard = {f: np.array(self._arrays[f][start:end]) for f in self._FIELDS}  # pyright: ignore[reportArgumentType]
-
+        for shard in _prefetch_shards(self._arrays, shard_order, self._shard_size):
             for b in rng.permutation(self._blocks_per_shard):
                 bs, be = int(b) * self._block_size, (int(b) + 1) * self._block_size
                 for f in self._FIELDS:
