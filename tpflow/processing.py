@@ -47,6 +47,28 @@ def auto_block_sizes(
     return block_size, traj_block_size
 
 
+def auto_blocks_per_shard(
+    block_size: int,
+    state_shape: tuple,
+    dtype_itemsize: int = 4,
+    target_gb: float = 1.0,
+) -> int:
+    """Return the number of blocks to pack into one shard file, targeting *target_gb*.
+
+    Args:
+        block_size:     number of samples per inner chunk (zarr ``chunks``).
+        state_shape:    shape of a single sample (excluding the sample axis).
+        dtype_itemsize: bytes per scalar value (4 for f4, 8 for f8).
+        target_gb:      desired uncompressed shard size in gigabytes.
+
+    Returns:
+        Number of blocks per shard (≥ 1).
+    """
+    target_bytes = int(target_gb * 1024**3)
+    bytes_per_block = max(1, math.prod(state_shape)) * dtype_itemsize * block_size
+    return max(1, target_bytes // bytes_per_block)
+
+
 def load_trajectory_zarr(
     path: str,
     n: int | None = None,

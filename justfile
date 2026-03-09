@@ -7,8 +7,14 @@ process_reg  := py + " ./tpflow/apps/04_process_regression_data.py"
 train_reg    := py + " ./tpflow/apps/05_train_regression.py"
 
 # ── shared defaults ────────────────────────────────────────────────────────────
+# data.block_size sets the inner zarr chunk size (~2 MB target via auto_block_sizes).
+# Shard size is chosen automatically to target ~1 GB per shard file.
 process_defaults   := "--multi data.trajectory_block_size=8 data.block_size=32"
 field_cfm_defaults := "-cn imgrot --multi inference.n_samples=36"
+
+# block_size=32 matches the training block_size in field-regression so that
+# shard_size (auto × 32) remains divisible by the training block_size.
+reg_process_defaults := "block_size=32"
 
 # ── dev ────────────────────────────────────────────────────────────────────────
 test:
@@ -79,10 +85,12 @@ field-cfm-trajectories-processed ds env:
   {{process_reg}} --multi \
     input=data/datasets/{{ds}}/cfm_trajectories/model1.zarr \
     output=data/datasets/{{ds}}/reg_train_data/model1.zarr \
+    {{reg_process_defaults}} \
     {{env}}
   {{process_reg}} --multi \
     input=data/datasets/{{ds}}/raw_trajectories/train.zarr \
     output=data/datasets/{{ds}}/reg_train_data/physics.zarr \
+    {{reg_process_defaults}} \
     {{env}}
 
 field-regression ds env:

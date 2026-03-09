@@ -65,7 +65,6 @@ def test_output_shapes():
             in_path,
             out_path,
             block_size=100,
-            blocks_per_shard=1,
             trajectory_block_size=4,
         )
 
@@ -94,7 +93,6 @@ def test_consecutive_states():
             in_path,
             out_path,
             block_size=100,
-            blocks_per_shard=1,
             trajectory_block_size=2,
         )
 
@@ -144,7 +142,6 @@ def test_no_time_array():
             in_path,
             out_path,
             block_size=100,
-            blocks_per_shard=1,
             trajectory_block_size=4,
         )
 
@@ -169,7 +166,6 @@ def test_missing_param():
             in_path,
             out_path,
             block_size=100,
-            blocks_per_shard=1,
             trajectory_block_size=4,
         )
 
@@ -196,7 +192,6 @@ def test_block_boundary():
             in_path,
             ref_path,
             block_size=100,
-            blocks_per_shard=1,
             trajectory_block_size=9,
         )  # one block
         ref = zarr.open_group(ref_path, mode="r")
@@ -207,7 +202,6 @@ def test_block_boundary():
                 in_path,
                 out_path,
                 block_size=100,
-                blocks_per_shard=1,
                 trajectory_block_size=bs,
             )
             out = zarr.open_group(out_path, mode="r")

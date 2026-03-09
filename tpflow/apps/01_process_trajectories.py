@@ -1,4 +1,5 @@
 import logging
+import math
 from os.path import join
 from typing import cast
 
@@ -11,7 +12,7 @@ from omegaconf import OmegaConf
 from tqdm import tqdm
 
 from tpflow.config import TrajectoryProcessing
-from tpflow.processing import open_zarr_array
+from tpflow.processing import auto_blocks_per_shard, open_zarr_array
 from tpflow.util import init_wandb, log_duration
 
 # Input must have fields
@@ -46,7 +47,6 @@ def main(cfg: TrajectoryProcessing) -> None:
                 out_filename,
                 n_samples,
                 cfg.data.block_size,
-                cfg.data.blocks_per_shard,
                 sample_shape,
             )
             data_mean, data_std = ds_statistics(indata)
@@ -73,27 +73,29 @@ def main(cfg: TrajectoryProcessing) -> None:
                 outfile["param"][sample_start:sample_end] = flat_param  # pyright: ignore[reportArgumentType]
 
 
-def make_outfile(name, n_samples, block_size, blocks_per_shard, sample_shape):
+def make_outfile(name, n_samples, block_size, sample_shape):
     outfile = zarr.create_group(name, overwrite=True)
-    shard_size = blocks_per_shard * block_size
+    # f8 dtype in app 01 → 8 bytes per scalar value; only shard when dataset
+    # is large enough to produce at least 2 shards (avoids overhead for tiny data).
+    n_bps = auto_blocks_per_shard(block_size, sample_shape, dtype_itemsize=8)
+    shard_size = n_bps * block_size
+    use_shards = shard_size < n_samples
+    logging.info(
+        "shard_size=%d samples (%.1f GB)%s",
+        shard_size,
+        shard_size * max(1, math.prod(sample_shape)) * 8 / 1024**3,
+        "" if use_shards else " — skipped, dataset fits in one shard",
+    )
 
     arrays = {
-        "data": {
-            "shape": (n_samples, *sample_shape),
-            "chunks": (block_size, *sample_shape),
-            "shards": (shard_size, *sample_shape),
-        },
-        "time": {
-            "shape": (n_samples,),
-            "chunks": (block_size,),
-            "shards": (shard_size,),
-        },
-        "param": {
-            "shape": (n_samples,),
-            "chunks": (block_size,),
-            "shards": (shard_size,),
-        },
+        "data": {"shape": (n_samples, *sample_shape), "chunks": (block_size, *sample_shape)},
+        "time": {"shape": (n_samples,), "chunks": (block_size,)},
+        "param": {"shape": (n_samples,), "chunks": (block_size,)},
     }
+    if use_shards:
+        arrays["data"]["shards"] = (shard_size, *sample_shape)
+        arrays["time"]["shards"] = (shard_size,)
+        arrays["param"]["shards"] = (shard_size,)
 
     for array_name, config in arrays.items():
         outfile.create_array(array_name, dtype="f8", **config)

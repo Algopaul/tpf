@@ -10,7 +10,6 @@ class DataConfig:
     type: str = "hist"
     batch_size: int = 100_000
     block_size: int = 10_000
-    blocks_per_shard: int = 50
     trajectory_block_size: int = 8
     fields: tuple = ("data", "time")
 
@@ -86,7 +85,6 @@ class RegressionDataConfig:
     input: str = "MISSING"  # path to input .zarr
     output: str = "regression_data.zarr"
     block_size: int = 0  # 0 = auto: targets ~2 MB zarr chunks based on state_shape
-    blocks_per_shard: int = 50
     trajectory_block_size: int = 0  # 0 = auto: targets ~2 MB input buffer
     wandb: WandbConfig = field(default_factory=WandbConfig)
 
