@@ -47,6 +47,16 @@ class InferenceConfig:
 
 
 @dataclass
+class EnergySpectraConfig:
+    n_bins: int = 32
+    log_bins: bool = False
+    # -1 means the state is already a plain 2-D (H, W) field with no channel axis.
+    # Set to 0 (or any valid axis index) when state_shape is (H, W, C) or (C, H, W).
+    channel_axis: int = -1
+    channel_idx: int = 0
+
+
+@dataclass
 class RegressionTraining:
     model_type: str = "mlp"
     mlp: MLPConfig = field(default_factory=MLPConfig)
@@ -62,6 +72,12 @@ class RegressionTraining:
     eval_interval: int = 50
     n_rollout: int = 16
     data_type: str = "hist"  # 'hist' or 'field'
+    # Scalar statistics to compare in rollout eval.  Any subset of:
+    # "first_moment", "enstrophy", "kurtosis"
+    stats: tuple = ("first_moment", "enstrophy", "kurtosis")
+    # Set True to also compare radially-averaged energy spectra (field data only).
+    log_energy_spectra: bool = False
+    energy_spectra: EnergySpectraConfig = field(default_factory=EnergySpectraConfig)
     wandb: WandbConfig = field(default_factory=WandbConfig)
 
 

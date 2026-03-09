@@ -48,7 +48,7 @@ from tpflow.model import (
     store_regression_model,
 )
 from tpflow.processing import load_trajectory_zarr
-from tpflow.statistics import trajectory_statistics
+from tpflow.statistics import energy_spectra, trajectory_statistics
 from tpflow.util import init_wandb, log_duration
 from tpflow.visualization import trace_video
 
@@ -159,6 +159,44 @@ def main(cfg: RegressionTraining) -> None:
                 _log_rollout_eval(model, cfg, run, epoch + 1, diff_scale)
 
 
+def _spectra_figure(
+    bin_centers: np.ndarray,
+    rollout_spectra: np.ndarray,
+    ref_spectra: np.ndarray,
+):
+    """Mean ± std energy spectrum plot comparing rollout and reference.
+
+    Averages over the time axis before computing ensemble statistics, giving
+    a single stationary spectrum per trajectory.
+
+    Args:
+        bin_centers:     ``(n_bins,)`` wavenumber bin centres.
+        rollout_spectra: ``(n_time, n_rollout, n_bins)`` from the model.
+        ref_spectra:     ``(n_time, n_rollout, n_bins)`` from reference data.
+
+    Returns:
+        Matplotlib figure (caller is responsible for closing it).
+    """
+    # Average over time → (n_rollout, n_bins), then mean/std over ensemble
+    r = np.mean(rollout_spectra, axis=0)   # (n_rollout, n_bins)
+    f = np.mean(ref_spectra, axis=0)       # (n_rollout, n_bins)
+    rm, rs = np.mean(r, axis=0), np.std(r, axis=0)
+    fm, fs = np.mean(f, axis=0), np.std(f, axis=0)
+
+    fig, ax = plt.subplots(figsize=(6, 3))
+    ax.fill_between(bin_centers, rm - rs, rm + rs, alpha=0.25, color="tab:blue")
+    ax.plot(bin_centers, rm, color="tab:blue", label="rollout")
+    ax.fill_between(bin_centers, fm - fs, fm + fs, alpha=0.25, color="tab:orange")
+    ax.plot(bin_centers, fm, color="tab:orange", linestyle="--", label="reference")
+    ax.set_yscale("log")
+    ax.set_xlabel("wavenumber")
+    ax.set_ylabel("power")
+    ax.set_title("energy spectra")
+    ax.legend()
+    fig.tight_layout()
+    return fig
+
+
 def _log_rollout_eval(
     model, cfg: RegressionTraining, run, step: int, diff_scale: float = 1.0
 ):
@@ -187,13 +225,39 @@ def _log_rollout_eval(
 
     # reference: (n_rollout, n_time, *state) → (n_time, n_rollout, *state)
     ref = np.moveaxis(traj_data, 0, 1)
-    rollout_stats = trajectory_statistics(out)
-    ref_stats = trajectory_statistics(ref)
-    for stat_name in rollout_stats:
-        fig = _stats_figure(
-            stat_name, rollout_stats[stat_name], ref_stats[stat_name], time_vector
+
+    if cfg.stats:
+        rollout_stats = trajectory_statistics(out)
+        ref_stats = trajectory_statistics(ref)
+        for stat_name in cfg.stats:
+            if stat_name not in rollout_stats:
+                logging.warning("Unknown stat %r — skipping", stat_name)
+                continue
+            fig = _stats_figure(
+                stat_name, rollout_stats[stat_name], ref_stats[stat_name], time_vector
+            )
+            run.log({f"eval/{stat_name}": wandb.Image(fig)}, step=step)
+            plt.close(fig)
+
+    if cfg.log_energy_spectra:
+        ch_axis = cfg.energy_spectra.channel_axis
+        channel_axis = ch_axis if ch_axis >= 0 else None
+        rollout_bins, rollout_spectra = energy_spectra(
+            out,
+            n_bins=cfg.energy_spectra.n_bins,
+            log_bins=cfg.energy_spectra.log_bins,
+            channel_axis=channel_axis,
+            channel_idx=cfg.energy_spectra.channel_idx,
         )
-        run.log({f"eval/{stat_name}": wandb.Image(fig)}, step=step)
+        _, ref_spectra = energy_spectra(
+            ref,
+            n_bins=cfg.energy_spectra.n_bins,
+            log_bins=cfg.energy_spectra.log_bins,
+            channel_axis=channel_axis,
+            channel_idx=cfg.energy_spectra.channel_idx,
+        )
+        fig = _spectra_figure(rollout_bins, rollout_spectra, ref_spectra)
+        run.log({"eval/energy_spectra": wandb.Image(fig)}, step=step)
         plt.close(fig)
 
 

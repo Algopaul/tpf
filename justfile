@@ -121,6 +121,20 @@ kolflow-processed extras:
 kolflow-cfm extras:
   {{train_cfm}} {{field_cfm_defaults}} data.name=kolflow unet.base_ch=32 {{extras}}
 
+# state_shape=(H,W,1) → channel_axis=2; compare enstrophy + first_moment + energy spectra
+kolflow-cfm-trajectories checkpoint modelname extras:
+  just field-cfm-trajectories kolflow {{checkpoint}} {{modelname}} "{{extras}}"
+
+kolflow-cfm-trajectories-processed extras:
+  just field-cfm-trajectories-processed kolflow "{{extras}}"
+
+kolflow-regression extras:
+  just field-regression kolflow \
+    "log_energy_spectra=true \
+     energy_spectra.channel_axis=2 \
+     'stats=[enstrophy,first_moment,kurtosis]' \
+     {{extras}}"
+
 # ── hw2d ───────────────────────────────────────────────────────────────────────
 # Step 0: generate raw trajectories (density + phi) on the cluster.
 # Each seed is one SLURM job via Hydra submitit.  Use +env=torchcpu for CPU nodes.
