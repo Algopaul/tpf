@@ -70,7 +70,7 @@ def main(cfg: CFMTraining) -> None:
         model = get_model(cfg, rngs=rngs)
         jax.block_until_ready(model)
         logging.info("Model loaded")
-        data = ZarrData(cfg.data, "train_shuffled")
+        data = ZarrData(cfg.data, "train")
         val_data = get_data(cfg.data, "test")
         logging.info("Data prepared")
         opt = get_optimizer(model, cfg.opt, len(data))

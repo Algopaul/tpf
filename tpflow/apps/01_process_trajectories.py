@@ -6,7 +6,6 @@ import hydra
 import numpy as np
 import zarr
 from flanch.trajectories import flatten_trajectories
-from hdfx.shuffle import zarrshuffle
 from hdfx.statistics import ds_statistics
 from omegaconf import OmegaConf
 from tqdm import tqdm
@@ -47,6 +46,7 @@ def main(cfg: TrajectoryProcessing) -> None:
                 out_filename,
                 n_samples,
                 cfg.data.block_size,
+                cfg.data.blocks_per_shard,
                 sample_shape,
             )
             data_mean, data_std = ds_statistics(indata)
@@ -72,22 +72,26 @@ def main(cfg: TrajectoryProcessing) -> None:
                 outfile["time"][sample_start:sample_end] = flat_time  # pyright: ignore[reportArgumentType]
                 outfile["param"][sample_start:sample_end] = flat_param  # pyright: ignore[reportArgumentType]
 
-            if split == "train":
-                shuffled_out = join(basedir, "cfm_train_data", "train_shuffled.zarr")
-                zarrshuffle(out_filename, shuffled_out, cfg.data.block_size, 0)
-
-
-def make_outfile(name, n_samples, block_size, sample_shape):
+def make_outfile(name, n_samples, block_size, blocks_per_shard, sample_shape):
     outfile = zarr.create_group(name, overwrite=True)
-    default = {"shape": (n_samples,), "chunks": (block_size,)}
+    shard_size = blocks_per_shard * block_size
 
     arrays = {
         "data": {
             "shape": (n_samples, *sample_shape),
             "chunks": (block_size, *sample_shape),
+            "shards": (shard_size, *sample_shape),
         },
-        "time": default,
-        "param": default,
+        "time": {
+            "shape": (n_samples,),
+            "chunks": (block_size,),
+            "shards": (shard_size,),
+        },
+        "param": {
+            "shape": (n_samples,),
+            "chunks": (block_size,),
+            "shards": (shard_size,),
+        },
     }
 
     for array_name, config in arrays.items():

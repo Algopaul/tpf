@@ -61,7 +61,7 @@ def test_output_shapes():
         out_path = str(Path(tmpdir) / "output.zarr")
 
         make_input_zarr(in_path, n_traj, n_time, state_shape)
-        _process(in_path, out_path, block_size=100, trajectory_block_size=4)
+        _process(in_path, out_path, block_size=100, blocks_per_shard=1, trajectory_block_size=4)
 
         out = zarr.open_group(out_path, mode="r")
         assert _arr(out, "data").shape == (n_samples, *state_shape)
@@ -84,7 +84,7 @@ def test_consecutive_states():
         out_path = str(Path(tmpdir) / "output.zarr")
 
         data, param, time = make_input_zarr(in_path, n_traj, n_time, state_shape)
-        _process(in_path, out_path, block_size=100, trajectory_block_size=2)
+        _process(in_path, out_path, block_size=100, blocks_per_shard=1, trajectory_block_size=2)
 
         out = zarr.open_group(out_path, mode="r")
         out_data = np.array(_arr(out, "data"))
@@ -128,7 +128,7 @@ def test_no_time_array():
         out_path = str(Path(tmpdir) / "output.zarr")
 
         make_input_zarr(in_path, n_traj, n_time, state_shape, with_time=False)
-        _process(in_path, out_path, block_size=100, trajectory_block_size=4)
+        _process(in_path, out_path, block_size=100, blocks_per_shard=1, trajectory_block_size=4)
 
         out = zarr.open_group(out_path, mode="r")
         out_time = np.array(_arr(out, "time"))
@@ -147,7 +147,7 @@ def test_missing_param():
         out_path = str(Path(tmpdir) / "output.zarr")
 
         make_input_zarr(in_path, n_traj, n_time, state_shape, with_param=False)
-        _process(in_path, out_path, block_size=100, trajectory_block_size=4)
+        _process(in_path, out_path, block_size=100, blocks_per_shard=1, trajectory_block_size=4)
 
         out = zarr.open_group(out_path, mode="r")
         np.testing.assert_array_equal(
@@ -169,13 +169,13 @@ def test_block_boundary():
 
         ref_path = str(Path(tmpdir) / "ref.zarr")
         _process(
-            in_path, ref_path, block_size=100, trajectory_block_size=9
+            in_path, ref_path, block_size=100, blocks_per_shard=1, trajectory_block_size=9
         )  # one block
         ref = zarr.open_group(ref_path, mode="r")
 
         for bs in [1, 3, 4]:
             out_path = str(Path(tmpdir) / f"out_{bs}.zarr")
-            _process(in_path, out_path, block_size=100, trajectory_block_size=bs)
+            _process(in_path, out_path, block_size=100, blocks_per_shard=1, trajectory_block_size=bs)
             out = zarr.open_group(out_path, mode="r")
             for key in ("data", "next", "time", "param"):
                 np.testing.assert_allclose(

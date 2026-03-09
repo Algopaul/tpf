@@ -1,6 +1,7 @@
 import io
 import json
 import os
+from typing import cast
 
 import jax
 import numpy as np
@@ -66,92 +67,127 @@ def get_data(cfg: DataConfig, split):
 
 
 class ZarrData:
+    """Block-shuffled dataloader for sharded zarr CFM training data.
+
+    Iterates shard by shard: shuffles shard order, then within each shard
+    shuffles blocks before assembling batches. Memory footprint is one shard
+    at a time rather than the full dataset.
+    """
+
     def __init__(self, cfg: DataConfig, split: str):
-        self.cfg = DataConfig
-        self.split = split
         basedir = f"data/datasets/{cfg.name}"
         in_filename = os.path.join(basedir, "cfm_train_data", f"{split}.zarr")
-        file = zarr.open(in_filename, mode="r")
-        self.n_blocks = None
-        self.n_batches = None
-        self.split_data = {}
-        self.fields = cfg.fields
+        group = cast(zarr.Group, zarr.open(in_filename, mode="r"))
+        self._fields = cfg.fields
+        self._block_size = cfg.block_size
+        self._batch_size = cfg.batch_size
         assert cfg.batch_size % cfg.block_size == 0
+        self._blocks_per_batch = cfg.batch_size // cfg.block_size
 
-        for field in cfg.fields:
-            d = np.array(file[field])
-            batches = len(d) // cfg.batch_size
-            blocks = (batches * cfg.batch_size) // cfg.block_size
-
-            if self.n_blocks is None:
-                self.n_blocks = blocks
-            else:
-                assert self.n_blocks == blocks
-
-            if self.n_batches is None:
-                self.n_batches = batches
-            else:
-                assert self.n_batches == batches
-
-            self.split_data[field] = np.array(
-                np.split(
-                    d[: self.n_batches * cfg.batch_size],
-                    self.n_blocks,
-                )
-            )
+        self._arrays: dict[str, zarr.Array] = {
+            f: cast(zarr.Array, group[f]) for f in cfg.fields
+        }
+        first = self._arrays[cfg.fields[0]]
+        n_samples = first.shape[0]
+        shard_shape = first.shards
+        shard_size = shard_shape[0] if shard_shape is not None else n_samples
+        assert shard_size % cfg.block_size == 0, (
+            f"shard_size {shard_size} must be divisible by block_size {cfg.block_size}"
+        )
+        self._shard_size = shard_size
+        self._n_shards = n_samples // shard_size
+        self._blocks_per_shard = shard_size // cfg.block_size
+        self._n_batches = (self._n_shards * shard_size) // cfg.batch_size
 
     def __len__(self):
-        assert self.n_batches is not None
-        return self.n_batches
+        return self._n_batches
 
     def iter_batches(self, seed=None):
         rng = np.random.default_rng(seed)
-        assert self.n_blocks is not None
-        assert self.n_batches is not None
-        indices = rng.permutation(self.n_blocks)
-        batch_idcs = np.array(np.split(indices, self.n_batches))
-        for b in batch_idcs:
-            yield {
-                f: np.concatenate(self.split_data[f][b], axis=0) for f in self.fields
-            }
+        shard_order = rng.permutation(self._n_shards)
+        block_buffer: dict[str, list] = {f: [] for f in self._fields}
+        n_buffered = 0
+        batches_yielded = 0
+
+        for shard_idx in shard_order:
+            start = int(shard_idx) * self._shard_size
+            end = start + self._shard_size
+            shard = {f: np.array(self._arrays[f][start:end]) for f in self._fields}  # pyright: ignore[reportArgumentType]
+
+            for b in rng.permutation(self._blocks_per_shard):
+                bs, be = int(b) * self._block_size, (int(b) + 1) * self._block_size
+                for f in self._fields:
+                    block_buffer[f].append(shard[f][bs:be])
+                n_buffered += 1
+                if n_buffered == self._blocks_per_batch:
+                    yield {f: np.concatenate(block_buffer[f], axis=0) for f in self._fields}
+                    block_buffer = {f: [] for f in self._fields}
+                    n_buffered = 0
+                    batches_yielded += 1
+                    if batches_yielded >= self._n_batches:
+                        return
 
 
 class RegressionZarrData:
-    """Zarr-backed dataloader for regression training data.
+    """Shard-aware dataloader for regression training data.
 
-    Expects arrays: data, next, time, param — all at a direct zarr path
-    (as written by 04_process_regression_data.py).
+    Iterates shard by shard: shuffles shard order, then within each shard
+    shuffles blocks before assembling batches. Memory footprint is one shard
+    at a time rather than the full dataset.
     """
 
     _FIELDS = ("data", "next", "time", "param")
 
     def __init__(self, path: str, batch_size: int, block_size: int):
         assert batch_size % block_size == 0
-        file = zarr.open(path, mode="r")
-        self.diff_scale: float = float(file.attrs.get("diff_scale", 1.0))
-        n_samples = file["data"].shape[0]
-        n_batches = n_samples // batch_size
-        n_blocks = n_batches * (batch_size // block_size)
-        self.n_batches = n_batches
-        self.n_blocks = n_blocks
-        self.split_data = {}
-        for field in self._FIELDS:
-            d = np.array(file[field])
-            self.split_data[field] = np.array(
-                np.split(d[: n_batches * batch_size], n_blocks)
-            )
+        group = cast(zarr.Group, zarr.open(path, mode="r"))
+        self.diff_scale: float = float(group.attrs.get("diff_scale", 1.0))  # pyright: ignore[reportArgumentType]
+        self._block_size = block_size
+        self._batch_size = batch_size
+        self._blocks_per_batch = batch_size // block_size
+
+        self._arrays: dict[str, zarr.Array] = {
+            f: cast(zarr.Array, group[f]) for f in self._FIELDS
+        }
+        first = self._arrays["data"]
+        n_samples = first.shape[0]
+        shard_shape = first.shards
+        shard_size = shard_shape[0] if shard_shape is not None else n_samples
+        assert shard_size % block_size == 0, (
+            f"shard_size {shard_size} must be divisible by block_size {block_size}"
+        )
+        self._shard_size = shard_size
+        self._n_shards = n_samples // shard_size
+        self._blocks_per_shard = shard_size // block_size
+        self._n_batches = (self._n_shards * shard_size) // batch_size
 
     def __len__(self):
-        return self.n_batches
+        return self._n_batches
 
     def iter_batches(self, seed=None):
         rng = np.random.default_rng(seed)
-        indices = rng.permutation(self.n_blocks)
-        batch_idcs = np.array(np.split(indices, self.n_batches))
-        for b in batch_idcs:
-            yield {
-                f: np.concatenate(self.split_data[f][b], axis=0) for f in self._FIELDS
-            }
+        shard_order = rng.permutation(self._n_shards)
+        block_buffer: dict[str, list] = {f: [] for f in self._FIELDS}
+        n_buffered = 0
+        batches_yielded = 0
+
+        for shard_idx in shard_order:
+            start = int(shard_idx) * self._shard_size
+            end = start + self._shard_size
+            shard = {f: np.array(self._arrays[f][start:end]) for f in self._FIELDS}  # pyright: ignore[reportArgumentType]
+
+            for b in rng.permutation(self._blocks_per_shard):
+                bs, be = int(b) * self._block_size, (int(b) + 1) * self._block_size
+                for f in self._FIELDS:
+                    block_buffer[f].append(shard[f][bs:be])
+                n_buffered += 1
+                if n_buffered == self._blocks_per_batch:
+                    yield {f: np.concatenate(block_buffer[f], axis=0) for f in self._FIELDS}
+                    block_buffer = {f: [] for f in self._FIELDS}
+                    n_buffered = 0
+                    batches_yielded += 1
+                    if batches_yielded >= self._n_batches:
+                        return
 
 
 def get_regression_val_data(path: str, batch_size: int) -> list[dict]:

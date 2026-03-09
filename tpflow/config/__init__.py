@@ -10,6 +10,7 @@ class DataConfig:
     type: str = "hist"
     batch_size: int = 100_000
     block_size: int = 10_000
+    blocks_per_shard: int = 50
     trajectory_block_size: int = 8
     fields: tuple = ("data", "time")
 
@@ -25,7 +26,7 @@ class WandbConfig:
 @dataclass
 class WDSConvertConfig:
     data: DataConfig = field(default_factory=DataConfig)
-    splits: tuple = ("train_shuffled", "test")
+    splits: tuple = ("train", "test")
     blocks_per_shard: int = 500
     wandb: WandbConfig = field(default_factory=WandbConfig)
 
@@ -69,8 +70,8 @@ class RegressionDataConfig:
     input: str = "MISSING"  # path to input .zarr
     output: str = "regression_data.zarr"
     block_size: int = 0  # 0 = auto: targets ~2 MB zarr chunks based on state_shape
+    blocks_per_shard: int = 50
     trajectory_block_size: int = 0  # 0 = auto: targets ~2 MB input buffer
-    shuffle: bool = True
     wandb: WandbConfig = field(default_factory=WandbConfig)
 
 
