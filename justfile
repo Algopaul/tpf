@@ -150,6 +150,13 @@ kolflow-regression extras:
      'stats=[enstrophy,first_moment,kurtosis]' \
      {{extras}}"
 
+hw2d-regression extras:
+  just field-regression hw2d \
+    "data_type=hw2d \
+     unet.channels_inout=2 \
+     'stats=[gamma_n,gamma_c,energy,hw2d_enstrophy]' \
+     {{extras}}"
+
 # ── hw2d ───────────────────────────────────────────────────────────────────────
 # Step 0: generate raw trajectories (density + phi) on the cluster.
 # Each seed is one SLURM job via Hydra submitit.  Use +env=torchcpu for CPU nodes.

@@ -36,7 +36,7 @@ _RECIPES: dict[str, dict[str, Optional[str]]] = {
         "train_cfm": "hw2d-cfm",
         "cfm_trajectories": None,
         "cfm_trajectories_processed": None,
-        "regression": None,
+        "regression": "hw2d-regression",
     },
     "imgrot": {
         "process": "imgrot-processed",

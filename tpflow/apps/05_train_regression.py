@@ -49,7 +49,7 @@ from tpflow.model import (
     store_regression_model,
 )
 from tpflow.processing import load_trajectory_zarr
-from tpflow.statistics import energy_spectra, trajectory_statistics
+from tpflow.statistics import energy_spectra, hw2d_statistics, trajectory_statistics
 from tpflow.util import init_wandb, log_duration
 from tpflow.visualization import trace_video
 
@@ -234,8 +234,12 @@ def _log_rollout_eval(
     ref = np.moveaxis(traj_data, 0, 1)
 
     if cfg.stats:
-        rollout_stats = trajectory_statistics(out)
-        ref_stats = trajectory_statistics(ref)
+        if cfg.data_type == "hw2d":
+            rollout_stats = hw2d_statistics(out)
+            ref_stats = hw2d_statistics(ref)
+        else:
+            rollout_stats = trajectory_statistics(out)
+            ref_stats = trajectory_statistics(ref)
         for stat_name in cfg.stats:
             if stat_name not in rollout_stats:
                 logging.warning("Unknown stat %r — skipping", stat_name)
