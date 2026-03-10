@@ -64,6 +64,9 @@ class RegressionTraining:
     train_data: str = "MISSING"  # path to training regression zarr
     val_data: str = "MISSING"  # path to validation regression zarr
     rollout_data: str = "MISSING"  # path to trajectory zarr for rollout eval
+    # Path to cfm_train_data/train.zarr; when set, raw rollout_data trajectories
+    # are normalised with the stored data_mean/data_std before evaluation.
+    norm_stats_path: str = ""
     batch_size: int = 100_000
     block_size: int = 10_000
     mode: str = "step"  # 'step' or 'difference'

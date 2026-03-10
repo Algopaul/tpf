@@ -32,6 +32,19 @@ def main(cfg: TrajectoryProcessing) -> None:
     basedir = f"data/datasets/{cfg.data.name}"
     with init_wandb(cfg, "traj-orga"):
         logging.info(cfg.data.name)
+
+        # Compute normalisation stats from the training split only, then reuse
+        # for all splits so the test split lives in the same normalised space.
+        train_raw = join(basedir, "raw_trajectories", "train.zarr")
+        train_infile = cast(zarr.Group, zarr.open(train_raw, mode="r"))
+        train_indata = open_zarr_array(train_infile, "data")
+        data_mean, data_std = ds_statistics(train_indata)
+        logging.info(
+            "Normalisation stats (from train): mean=%s std=%s",
+            np.asarray(data_mean),
+            np.asarray(data_std),
+        )
+
         for split in ["train", "test"]:
             in_filename = join(basedir, "raw_trajectories", split + ".zarr")
             out_filename = join(basedir, "cfm_train_data", split + ".zarr")
@@ -49,7 +62,10 @@ def main(cfg: TrajectoryProcessing) -> None:
                 cfg.data.block_size,
                 sample_shape,
             )
-            data_mean, data_std = ds_statistics(indata)
+
+            if split == "train":
+                outfile.attrs["data_mean"] = np.asarray(data_mean).tolist()
+                outfile.attrs["data_std"] = np.asarray(data_std).tolist()
 
             time_vector = np.array(infile["time"])
             for traj_start in tqdm(

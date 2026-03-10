@@ -28,6 +28,7 @@ import logging
 
 import hydra
 import jax
+import zarr
 import jax.numpy as jnp
 import jax.random as jrd
 import matplotlib.pyplot as plt
@@ -203,6 +204,12 @@ def _log_rollout_eval(
     traj_data, traj_param, time_vector = load_trajectory_zarr(
         cfg.rollout_data, n=cfg.n_rollout
     )
+
+    if cfg.norm_stats_path:
+        stats = zarr.open(cfg.norm_stats_path, mode="r")
+        data_mean = np.asarray(stats.attrs["data_mean"])
+        data_std = np.asarray(stats.attrs["data_std"])
+        traj_data = (traj_data - data_mean) / data_std
 
     x0 = jnp.array(traj_data[:, 0])  # (n_rollout, *state_shape)
     param = jnp.array(traj_param[:, None])  # (n_rollout, 1)

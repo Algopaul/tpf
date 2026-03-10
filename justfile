@@ -106,7 +106,8 @@ field-regression ds env:
     unet.base_ch=32 \
     train_data=./data/datasets/{{ds}}/reg_train_data/model1.zarr \
     val_data=./data/datasets/{{ds}}/reg_train_data/model1.zarr \
-    rollout_data=./data/datasets/{{ds}}/cfm_trajectories/model1.zarr \
+    rollout_data=./data/datasets/{{ds}}/raw_trajectories/test.zarr \
+    norm_stats_path=./data/datasets/{{ds}}/cfm_train_data/train.zarr \
     batch_size=512 \
     block_size=32 \
     mode=difference \
