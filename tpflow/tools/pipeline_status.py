@@ -9,6 +9,7 @@ Usage:
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -51,8 +52,17 @@ def _recipe(ds: str, key: str) -> Optional[str]:
     return _RECIPES.get(ds, {}).get(key)
 
 
+def _fmt_mtime(mtime: float) -> str:
+    return datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
+
+
 def _zarr_exists(path: Path) -> bool:
     return (path / "zarr.json").exists()
+
+
+def _zarr_mtime(path: Path) -> Optional[float]:
+    p = path / "zarr.json"
+    return p.stat().st_mtime if p.exists() else None
 
 
 def _find_checkpoints(outputs_dir: Path, dataset: str, regression: bool) -> list[dict]:
@@ -148,28 +158,29 @@ def main(
     table.add_column("Step", justify="right")
     table.add_column("Stage")
     table.add_column("Status")
+    table.add_column("Modified")
     table.add_column("Details")
 
     for step, label, path in data_stages:
         ok = _zarr_exists(path)
         status = "[green]✓[/green]" if ok else "[red]✗[/red]"
-        table.add_row(step, label, status, str(path) if ok else "")
+        mtime = _zarr_mtime(path)
+        modified = _fmt_mtime(mtime) if mtime else ""
+        table.add_row(step, label, status, modified, str(path) if ok else "")
 
         if label == "cfm_train_data":
             ok2 = cfm_ckpt is not None
             status2 = "[green]✓[/green]" if ok2 else "[red]✗[/red]"
-            details2 = (
-                f"epoch {cfm_ckpt['epoch']}  {cfm_ckpt['path']}" if ok2 else ""
-            )
-            table.add_row("3", "cfm_checkpoint", status2, details2)
+            modified2 = _fmt_mtime(cfm_ckpt["_mtime"]) if ok2 else ""
+            details2 = f"epoch {cfm_ckpt['epoch']}  {cfm_ckpt['path']}" if ok2 else ""
+            table.add_row("3", "cfm_checkpoint", status2, modified2, details2)
 
         if label == "reg_train_data":
             ok3 = reg_ckpt is not None
             status3 = "[green]✓[/green]" if ok3 else "[red]✗[/red]"
-            details3 = (
-                f"epoch {reg_ckpt['epoch']}  {reg_ckpt['path']}" if ok3 else ""
-            )
-            table.add_row("6", "reg_checkpoint", status3, details3)
+            modified3 = _fmt_mtime(reg_ckpt["_mtime"]) if ok3 else ""
+            details3 = f"epoch {reg_ckpt['epoch']}  {reg_ckpt['path']}" if ok3 else ""
+            table.add_row("6", "reg_checkpoint", status3, modified3, details3)
 
     console.print(table)
 
