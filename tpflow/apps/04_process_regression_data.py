@@ -25,6 +25,7 @@ Usage:
 """
 
 import logging
+import math
 from typing import cast
 
 import hydra
@@ -95,8 +96,18 @@ def _process(
     auto_bs, auto_tbs = auto_block_sizes(state_shape, n_time)
     block_size = block_size or auto_bs
     trajectory_block_size = trajectory_block_size or auto_tbs
+
+    # Clamp trajectory_block_size up so each write covers at least one full shard.
+    # Without this, small trajectory blocks cause zarr to read-modify-write the
+    # entire shard file (potentially ~1 GB) for every iteration.
+    n_bps = auto_blocks_per_shard(block_size, state_shape, dtype_itemsize=4)
+    shard_size = n_bps * block_size
+    min_tbs_for_alignment = math.ceil(shard_size / n_steps)
+    trajectory_block_size = max(trajectory_block_size, min_tbs_for_alignment)
+
     logging.info(
-        "block_size=%d, trajectory_block_size=%d", block_size, trajectory_block_size
+        "block_size=%d, trajectory_block_size=%d (shard=%d samples)",
+        block_size, trajectory_block_size, shard_size,
     )
 
     if "time" in infile:
