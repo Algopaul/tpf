@@ -211,6 +211,16 @@ def _save_checkpoint(
         json.dump(info, f, indent=2)
 
 
+def _dataset_name_from_path(train_data_path: str) -> str:
+    """Extract dataset name from a train_data path like .../datasets/{ds}/..."""
+    parts = Path(train_data_path).parts
+    try:
+        idx = list(parts).index("datasets")
+        return parts[idx + 1]
+    except (ValueError, IndexError):
+        return "unknown"
+
+
 def store_regression_model(
     model, cfg: RegressionTraining, epoch: int, sample_shape: tuple
 ):
@@ -228,6 +238,7 @@ def store_regression_model(
             "mode": cfg.mode,
             "sample_shape": list(sample_shape),
             "epoch": epoch,
+            "data_name": _dataset_name_from_path(cfg.train_data),
         },
     )
 

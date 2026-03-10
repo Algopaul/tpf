@@ -16,6 +16,12 @@ field_cfm_defaults := "-cn imgrot --multi inference.n_samples=36"
 # shard_size (auto × 32) remains divisible by the training block_size.
 reg_process_defaults := "block_size=32"
 
+# ── pipeline status ────────────────────────────────────────────────────────────
+# Show progress and print the next command for a field dataset.
+# extras: optional args appended to the suggested command (e.g. "+env=slurm")
+status ds extras="":
+  {{py}} tpflow/tools/pipeline_status.py {{ds}} --extras "{{extras}}"
+
 # ── dev ────────────────────────────────────────────────────────────────────────
 test:
   .venv/bin/pytest tests/ -v
