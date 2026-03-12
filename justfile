@@ -22,8 +22,14 @@ reg_process_defaults := "block_size=32"
 status ds extras="":
   {{py}} tpflow/tools/pipeline_status.py {{ds}} --extras "{{extras}}"
 
-bench ds extras="":
-  {{py}} tpflow/tools/benchmark_dataloader.py {{ds}} {{extras}}
+# Safe on login nodes: prints shard/chunk layout without reading any data.
+bench-inspect ds extras="":
+  {{py}} tpflow/tools/benchmark_dataloader.py {{ds}} --inspect {{extras}}
+
+# Submit a full dataloader benchmark to SLURM (reads actual data).
+bench-slurm ds extras="":
+  sbatch --job-name=bench-{{ds}} --output=bench-{{ds}}-%j.log \
+    --wrap "cd {{invocation_directory()}} && {{py}} tpflow/tools/benchmark_dataloader.py {{ds}} {{extras}}"
 
 # ── dev ────────────────────────────────────────────────────────────────────────
 test:

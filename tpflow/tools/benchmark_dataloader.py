@@ -99,22 +99,44 @@ def main(
     compare_prefetch: bool = typer.Option(
         False, help="Run with prefetch=2,4,8 and compare"
     ),
+    inspect: bool = typer.Option(
+        False, help="Print data layout only — no data loaded, safe on login nodes"
+    ),
 ):
     from tpflow.data import RegressionZarrData, ZarrData
     from tpflow.config import DataConfig
 
-    def make_iter(pf: int):
+    # Build the dataloader (reads only zarr metadata JSON, no array data).
+    try:
         if loader == "regression":
             path = f"data/datasets/{dataset}/reg_train_data/{model}.zarr"
             dl = RegressionZarrData(path, batch_size, block_size)
+            state_shape = dl._arrays["data"].shape[1:]
+            bytes_per_batch = int(np.prod(state_shape)) * 4 * batch_size * 2  # data + next
+            console.print(f"\n[bold]Dataset:[/bold] {path}")
         else:
             cfg = DataConfig(name=dataset, batch_size=batch_size, block_size=block_size)
             dl = ZarrData(cfg, "train")
+            state_shape = dl._arrays[cfg.fields[0]].shape[1:]
+            bytes_per_batch = int(np.prod(state_shape)) * 4 * batch_size
+            console.print(f"\n[bold]Dataset:[/bold] data/datasets/{dataset}/cfm_train_data/train.zarr")
+    except FileNotFoundError as e:
+        console.print(f"[red]Data not found:[/red] {e}")
+        raise typer.Exit(1)
 
-        # iterate without jax.device_put — pure CPU measurement
+    console.print(
+        f"  shards={dl._n_shards}  shard_size={dl._shard_size}  "
+        f"blocks/shard={dl._blocks_per_shard}  batches/shard={dl._shard_size // batch_size}  "
+        f"total_batches={len(dl)}"
+    )
+    console.print(f"  state_shape={state_shape}  batch≈{bytes_per_batch / 1e6:.1f} MB")
+
+    if inspect:
+        return
+
+    def make_iter(pf: int):
         it = dl.iter_batches(seed=0)
         if pf > 0:
-            # lightweight prefetch: just keep the source iterator ahead by pf batches
             from collections import deque
             q: deque = deque()
             src = iter(it)
@@ -135,25 +157,12 @@ def main(
             return _prefetched()
         return iter(it)
 
-    # Print data layout summary
-    if loader == "regression":
-        path = f"data/datasets/{dataset}/reg_train_data/{model}.zarr"
-        dl = RegressionZarrData(path, batch_size, block_size)
-        console.print(f"\n[bold]Dataset:[/bold] {path}")
-        console.print(f"  shards={dl._n_shards}  shard_size={dl._shard_size}  "
-                      f"blocks/shard={dl._blocks_per_shard}  batches/shard={dl._shard_size//batch_size}  "
-                      f"total_batches={len(dl)}")
-        state_shape = dl._arrays["data"].shape[1:]
-        bytes_per_batch = int(np.prod(state_shape)) * 4 * batch_size * 2  # data + next
-        console.print(f"  state_shape={state_shape}  batch≈{bytes_per_batch/1e6:.1f} MB (data+next)")
-
     if compare_prefetch:
         for pf in [2, 4, 8]:
             _run(make_iter(pf), n_batches, compute_ms, f"prefetch={pf}")
     else:
         _run(make_iter(prefetch), n_batches, compute_ms, f"prefetch={prefetch}")
 
-    # Rule of thumb guidance
     console.print()
     console.print("[dim]Rule of thumb: if p95 > 2× mean, you have shard-boundary stalls.")
     console.print("If mean load time > GPU step time, the loader is the bottleneck.[/dim]")
