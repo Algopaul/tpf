@@ -25,6 +25,7 @@ Usage:
 """
 
 import logging
+import time
 
 import hydra
 import jax
@@ -128,15 +129,30 @@ def main(cfg: RegressionTraining) -> None:
             keys = jrd.split(rngs.param(), len(train_data))
             ep_data = device_prefetch(train_data.iter_batches(epoch))
             pbar = tqdm(enumerate(ep_data), total=len(train_data))
+            load_times: list[float] = []
+            dispatch_times: list[float] = []
+            t_loop = time.perf_counter()
             for i, batch in pbar:
+                t_got = time.perf_counter()
+                load_times.append(t_got - t_loop)
                 b = (jax.device_put(batch), keys[i])
                 loss_val, state = ts(state, b)
+                t_loop = time.perf_counter()
+                dispatch_times.append(t_loop - t_got)
                 met = r({"loss_val": loss_val})
                 pbar.set_postfix({"loss": f"{met['loss_val']:.2e}"})
 
             model, opt, avg_metric = nnx.merge(graphdef, state)
             logging.info("Epoch %d: Avg. loss %.4e", epoch + 1, avg_metric.compute())
-            run.log({"train/avg_loss": avg_metric.compute()}, step=epoch + 1)
+            # Skip first batch (cold start) before logging timing stats
+            lt = np.array(load_times[1:]) * 1000  # ms
+            dt = np.array(dispatch_times[1:]) * 1000
+            run.log({
+                "train/avg_loss": avg_metric.compute(),
+                "perf/load_ms_mean": float(np.mean(lt)),
+                "perf/load_ms_p95": float(np.percentile(lt, 95)),
+                "perf/dispatch_ms_mean": float(np.mean(dt)),
+            }, step=epoch + 1)
             avg_metric.reset()
 
             model.eval()

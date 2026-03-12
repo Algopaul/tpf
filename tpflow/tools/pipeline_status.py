@@ -89,9 +89,7 @@ def _latest(checkpoints: list[dict]) -> Optional[dict]:
     return max(checkpoints, key=lambda c: (c.get("epoch", 0), c["_mtime"]))
 
 
-def _next_step(
-    ds: str, outputs_dir: Path, extras: str
-) -> tuple[str, str]:
+def _next_step(ds: str, outputs_dir: Path, extras: str) -> tuple[str, str]:
     """Return (stage_label, command) for the next incomplete pipeline step."""
     base = DATA_ROOT / ds
     sfx = f" {extras}" if extras else ""
@@ -149,14 +147,14 @@ def main(
 
     data_stages = [
         ("1", "raw_trajectories", base / "raw_trajectories" / "train.zarr"),
-        ("2", "cfm_train_data",   base / "cfm_train_data" / "train.zarr"),
+        ("2", "cfm_train_data", base / "cfm_train_data" / "train.zarr"),
         ("4", "cfm_trajectories", base / "cfm_trajectories" / "model1.zarr"),
-        ("5", "reg_train_data",   base / "reg_train_data" / "model1.zarr"),
+        ("5", "reg_train_data", base / "reg_train_data" / "model1.zarr"),
     ]
 
     table = Table(show_header=True, header_style="bold", title=f"Pipeline: {dataset}")
     table.add_column("Step", justify="right")
-    table.add_column("Stage")
+    table.add_column("Stage", justify="center")
     table.add_column("Status")
     table.add_column("Modified")
     table.add_column("Details")

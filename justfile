@@ -22,6 +22,9 @@ reg_process_defaults := "block_size=32"
 status ds extras="":
   {{py}} tpflow/tools/pipeline_status.py {{ds}} --extras "{{extras}}"
 
+bench ds extras="":
+  {{py}} tpflow/tools/benchmark_dataloader.py {{ds}} {{extras}}
+
 # ── dev ────────────────────────────────────────────────────────────────────────
 test:
   .venv/bin/pytest tests/ -v
