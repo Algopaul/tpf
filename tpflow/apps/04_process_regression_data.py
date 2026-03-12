@@ -48,7 +48,7 @@ def _make_outfile(
     path: str,
     n_samples: int,
     block_size: int,
-    state_shape: tuple,
+    state_shape: tuple[int, ...],
 ) -> zarr.Group:
     outfile = zarr.open_group(path, mode="w")
     # f4 dtype → 4 bytes per scalar; target ~1 GB per shard file.
@@ -63,18 +63,20 @@ def _make_outfile(
         shard_size,
         "" if use_shards else " — skipped, dataset fits in one chunk",
     )
-    data_kw = {"shards": (shard_size, *state_shape)} if use_shards else {}
-    scalar_kw = {"shards": (shard_size,)} if use_shards else {}
-    outfile.create_array(
-        "data", shape=(n_samples, *state_shape), chunks=(block_size, *state_shape),
-        dtype="f4", **data_kw,
-    )
-    outfile.create_array(
-        "next", shape=(n_samples, *state_shape), chunks=(block_size, *state_shape),
-        dtype="f4", **data_kw,
-    )
-    outfile.create_array("time", shape=(n_samples,), chunks=(block_size,), dtype="f8", **scalar_kw)
-    outfile.create_array("param", shape=(n_samples,), chunks=(block_size,), dtype="f8", **scalar_kw)
+    data_shape: tuple[int, ...] = (n_samples, *state_shape)
+    data_chunks: tuple[int, ...] = (block_size, *state_shape)
+    if use_shards:
+        data_shard: tuple[int, ...] = (shard_size, *state_shape)
+        scalar_shard: tuple[int, ...] = (shard_size,)
+        outfile.create_array("data", shape=data_shape, chunks=data_chunks, dtype="f4", shards=data_shard)
+        outfile.create_array("next", shape=data_shape, chunks=data_chunks, dtype="f4", shards=data_shard)
+        outfile.create_array("time", shape=(n_samples,), chunks=(block_size,), dtype="f8", shards=scalar_shard)
+        outfile.create_array("param", shape=(n_samples,), chunks=(block_size,), dtype="f8", shards=scalar_shard)
+    else:
+        outfile.create_array("data", shape=data_shape, chunks=data_chunks, dtype="f4")
+        outfile.create_array("next", shape=data_shape, chunks=data_chunks, dtype="f4")
+        outfile.create_array("time", shape=(n_samples,), chunks=(block_size,), dtype="f8")
+        outfile.create_array("param", shape=(n_samples,), chunks=(block_size,), dtype="f8")
     return outfile
 
 
@@ -89,7 +91,7 @@ def _process(
     inparam = open_zarr_array(infile, "param", indata.shape[0])
 
     n_traj, n_time = indata.shape[:2]
-    state_shape = indata.shape[2:]
+    state_shape: tuple[int, ...] = indata.shape[2:]
     n_steps = n_time - 1
     n_samples = n_traj * n_steps
 
@@ -112,6 +114,8 @@ def _process(
 
     if "time" in infile:
         time_vector = np.array(infile["time"])
+    elif "conditioning" in infile:
+        time_vector = np.array(infile["conditioning"])
     else:
         time_vector = np.arange(n_time, dtype=np.float64)
 

@@ -77,7 +77,7 @@ def get_regression_loss(mode: str, diff_scale: float = 1.0):
 
 
 def batch_prep(batch):
-    batch_dict, _key = batch
+    batch_dict, _ = batch
     return (
         batch_dict["data"],
         batch_dict["next"],
@@ -99,6 +99,7 @@ def main(cfg: RegressionTraining) -> None:
 
         train_data = RegressionZarrData(cfg.train_data, cfg.batch_size, cfg.block_size)
         diff_scale = train_data.diff_scale
+        sample_shape: tuple[int, ...] = train_data._arrays["data"].shape[1:]
         val_data = get_regression_val_data(cfg.val_data, cfg.batch_size)
         logging.info(
             "Data prepared: %d train batches, %d val batches",
@@ -171,7 +172,6 @@ def main(cfg: RegressionTraining) -> None:
             val_err.reset()
 
             if (epoch + 1) % cfg.eval_interval == 0:
-                sample_shape = batch["data"].shape[1:]
                 store_regression_model(model, cfg, epoch + 1, sample_shape)
                 _log_rollout_eval(model, cfg, run, epoch + 1, diff_scale)
 
@@ -217,9 +217,11 @@ def _spectra_figure(
 def _log_rollout_eval(
     model, cfg: RegressionTraining, run, step: int, diff_scale: float = 1.0
 ):
-    traj_data, traj_param, time_vector = load_trajectory_zarr(
+    traj_data, traj_param, _ = load_trajectory_zarr(
         cfg.rollout_data, n=cfg.n_rollout
     )
+    n_time = traj_data.shape[1]
+    time_vector = np.linspace(cfg.cond_start, cfg.cond_end, n_time, dtype=np.float32)
 
     if cfg.norm_stats_path:
         stats = zarr.open(cfg.norm_stats_path, mode="r")

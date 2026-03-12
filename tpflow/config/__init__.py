@@ -71,6 +71,8 @@ class RegressionTraining:
     block_size: int = 10_000
     mode: str = "step"  # 'step' or 'difference'
     time_conditioned: bool = True
+    cond_start: float = 0.0  # conditioning range used in step 03; rollout sweeps this range
+    cond_end: float = 1.0
     eval_interval: int = 50
     n_rollout: int = 16
     data_type: str = "hist"  # 'hist' or 'field'
@@ -80,6 +82,21 @@ class RegressionTraining:
     # Set True to also compare radially-averaged energy spectra (field data only).
     log_energy_spectra: bool = False
     energy_spectra: EnergySpectraConfig = field(default_factory=EnergySpectraConfig)
+    wandb: WandbConfig = field(default_factory=WandbConfig)
+
+
+@dataclass
+class BenchmarkConfig:
+    dataset: str = "MISSING"
+    loader: str = "cfm"        # "cfm" or "regression"
+    model: str = "model1"      # model name for regression data path
+    n_batches: int = 80
+    batch_size: int = 512
+    block_size: int = 32
+    prefetch: int = 2
+    compute_ms: float = 0.0    # simulate GPU step of this many ms
+    compare_prefetch: bool = False  # sweep prefetch=2,4,8
+    inspect: bool = False      # metadata only, no data loaded
     wandb: WandbConfig = field(default_factory=WandbConfig)
 
 
@@ -151,6 +168,7 @@ unet_xs = UNetConfig(
 )
 
 cs = ConfigStore.instance()
+cs.store(name="benchmark", node=BenchmarkConfig)
 cs.store(name="wds_convert", node=WDSConvertConfig)
 cs.store(name="cond_traj", node=CondTrajConfig)
 cs.store(name="config", node=TrajectoryProcessing)

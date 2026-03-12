@@ -24,12 +24,11 @@ status ds extras="":
 
 # Safe on login nodes: prints shard/chunk layout without reading any data.
 bench-inspect ds extras="":
-  {{py}} tpflow/tools/benchmark_dataloader.py {{ds}} --inspect {{extras}}
+  {{py}} tpflow/tools/benchmark_dataloader.py dataset={{ds}} inspect=true {{extras}}
 
-# Submit a full dataloader benchmark to SLURM (reads actual data).
-bench-slurm ds extras="":
-  sbatch --job-name=bench-{{ds}} --output=bench-{{ds}}-%j.log \
-    --wrap "cd {{invocation_directory()}} && {{py}} tpflow/tools/benchmark_dataloader.py {{ds}} {{extras}}"
+# Full dataloader benchmark — submit to a CPU node via +env=torchcpu.
+bench ds extras="":
+  {{py}} tpflow/tools/benchmark_dataloader.py --multi dataset={{ds}} {{extras}}
 
 # ── dev ────────────────────────────────────────────────────────────────────────
 test:
