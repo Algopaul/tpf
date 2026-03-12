@@ -87,7 +87,7 @@ def _run(
 @app.command()
 def main(
     dataset: str = typer.Argument(..., help="Dataset name (e.g. kolflow, hw2d)"),
-    loader: str = typer.Option("regression", help="'regression' or 'cfm'"),
+    loader: str = typer.Option("cfm", help="'cfm' or 'regression'"),
     model: str = typer.Option("model1", help="Model name for regression data"),
     n_batches: int = typer.Option(80, help="Batches to time per run"),
     batch_size: int = typer.Option(512),
