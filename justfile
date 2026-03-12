@@ -22,6 +22,11 @@ reg_process_defaults := "block_size=32"
 status ds extras="":
   {{py}} tpflow/tools/pipeline_status.py {{ds}} --extras "{{extras}}"
 
+# Dry-run: show what would be deleted to restart from step N (1-5).
+# Pass yes=true to actually delete: just restart-from kolflow 3 yes=true
+restart-from ds step yes="":
+  {{py}} tpflow/tools/pipeline_restart.py {{ds}} --from {{step}} {{if yes == "true" { "--yes" } else { "" } }}
+
 # Safe on login nodes: prints shard/chunk layout without reading any data.
 bench-inspect ds extras="":
   {{py}} tpflow/tools/benchmark_dataloader.py dataset={{ds}} inspect=true {{extras}}
