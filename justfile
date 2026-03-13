@@ -169,8 +169,7 @@ kolflow-regression extras:
 
 hw2d-regression extras:
   just field-regression hw2d \
-    "data_type=hw2d \
-     unet.channels_inout=2 \
+    "unet.channels_inout=2 \
      'stats=[gamma_n,gamma_c,energy,hw2d_enstrophy]' \
      {{extras}}"
 

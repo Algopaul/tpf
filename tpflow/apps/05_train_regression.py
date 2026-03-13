@@ -252,7 +252,7 @@ def _log_rollout_eval(
     ref = np.moveaxis(traj_data, 0, 1)
 
     if cfg.stats:
-        if cfg.data_type == "hw2d":
+        if cfg.dataset == "hw2d":
             rollout_stats = hw2d_statistics(out)
             ref_stats = hw2d_statistics(ref)
         else:
