@@ -70,7 +70,7 @@ def main(cfg: CondTrajConfig) -> None:
     model.eval()
     logging.info("Model loaded")
 
-    with init_wandb(cfg, "cond-traj"):
+    with init_wandb(cfg, "cond-traj", data_name=cfg.dataset or None):
         info = load_checkpoint_info(checkpoint)
         sample_shape = tuple(info["sample_shape"])
         cond_values = np.linspace(cfg.cond_start, cfg.cond_end, cfg.n_cond_steps)

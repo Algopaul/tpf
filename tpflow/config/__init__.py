@@ -61,6 +61,7 @@ class RegressionTraining:
     mlp: MLPConfig = field(default_factory=MLPConfig)
     unet: UNetConfig = field(default_factory=UNetConfig)
     opt: OptimizerConfig = field(default_factory=OptimizerConfig)
+    dataset: str = ""  # dataset name included in wandb run title
     train_data: str = "MISSING"  # path to training regression zarr
     val_data: str = "MISSING"  # path to validation regression zarr
     rollout_data: str = "MISSING"  # path to trajectory zarr for rollout eval
@@ -104,6 +105,7 @@ class BenchmarkConfig:
 class RegressionDataConfig:
     input: str = "MISSING"  # path to input .zarr
     output: str = "regression_data.zarr"
+    dataset: str = ""  # dataset name included in wandb run title
     block_size: int = 0  # 0 = auto: targets ~2 MB zarr chunks based on state_shape
     trajectory_block_size: int = 0  # 0 = auto: targets ~2 MB input buffer
     wandb: WandbConfig = field(default_factory=WandbConfig)
@@ -112,6 +114,7 @@ class RegressionDataConfig:
 @dataclass
 class CondTrajConfig:
     checkpoint: str = "MISSING"  # path to {run_dir}/{epoch}/
+    dataset: str = ""  # dataset name included in wandb run title
     n_samples: int = 256  # total source noise vectors
     batch_size: int = 256  # samples per forward pass (memory limit)
     seed: int = 0

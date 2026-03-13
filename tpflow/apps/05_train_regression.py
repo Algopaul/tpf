@@ -89,7 +89,7 @@ def batch_prep(batch):
 @hydra.main(version_base=None, config_name="regression", config_path="../../conf")
 @log_duration()
 def main(cfg: RegressionTraining) -> None:
-    with init_wandb(cfg, "regression-train") as run:
+    with init_wandb(cfg, "regression-train", data_name=cfg.dataset or None) as run:
         logging.info("\n%s", OmegaConf.to_yaml(cfg))
 
         rngs = nnx.Rngs(0)

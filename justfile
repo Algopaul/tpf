@@ -95,6 +95,7 @@ imgrot-cfm-reg extras:
 field-cfm-trajectories ds checkpoint modelname env:
   {{gen_traj}} --multi \
     checkpoint={{checkpoint}} \
+    dataset={{ds}} \
     n_samples=1000 \
     n_cond_steps=128 \
     output=data/datasets/{{ds}}/cfm_trajectories/{{modelname}}.zarr \
@@ -104,11 +105,13 @@ field-cfm-trajectories-processed ds env:
   {{process_reg}} --multi \
     input=data/datasets/{{ds}}/cfm_trajectories/model1.zarr \
     output=data/datasets/{{ds}}/reg_train_data/model1.zarr \
+    dataset={{ds}} \
     {{reg_process_defaults}} \
     {{env}}
   {{process_reg}} --multi \
     input=data/datasets/{{ds}}/raw_trajectories/train.zarr \
     output=data/datasets/{{ds}}/reg_train_data/physics.zarr \
+    dataset={{ds}} \
     {{reg_process_defaults}} \
     {{env}}
 
@@ -117,6 +120,7 @@ field-regression ds env:
     model_type=unet \
     +unet=mid \
     unet.base_ch=32 \
+    dataset={{ds}} \
     train_data=./data/datasets/{{ds}}/reg_train_data/model1.zarr \
     val_data=./data/datasets/{{ds}}/reg_train_data/model1.zarr \
     rollout_data=./data/datasets/{{ds}}/raw_trajectories/test.zarr \

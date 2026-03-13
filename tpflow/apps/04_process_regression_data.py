@@ -163,7 +163,7 @@ def _process(
 @log_duration()
 def main(cfg: RegressionDataConfig) -> None:
     logging.info("\n%s", OmegaConf.to_yaml(cfg))
-    with init_wandb(cfg, "regression-data"):
+    with init_wandb(cfg, "regression-data", data_name=cfg.dataset or None):
         _process(
             cfg.input,
             cfg.output,
