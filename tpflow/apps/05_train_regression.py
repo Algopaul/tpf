@@ -97,7 +97,7 @@ def main(cfg: RegressionTraining) -> None:
     resume_run_id = None
     restart_path = None
     if cfg.restart_from:
-        restart_path = Path(cfg.restart_from)
+        restart_path = Path(cfg.restart_from).resolve()
         if not (restart_path / "checkpoint_info.json").exists():
             restart_path = _find_latest_checkpoint(restart_path)
             if restart_path is None:
