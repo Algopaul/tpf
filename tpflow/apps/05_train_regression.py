@@ -59,7 +59,7 @@ from tpflow.util import init_wandb, log_duration
 from tpflow.visualization import trace_video
 
 
-def get_regression_loss(mode: str, diff_scale: float = 1.0):
+def get_regression_loss(mode: str, diff_scale=1.0):
 
     def regression_loss(model, batch):
         x, x_next, time, param = batch
@@ -132,7 +132,9 @@ def main(cfg: RegressionTraining) -> None:
             len(train_data),
             len(val_data),
         )
-        logging.info("diff_scale = %.6g", diff_scale)
+        logging.info("diff_scale shape=%s mean=%.6g min=%.6g max=%.6g",
+                     diff_scale.shape, float(diff_scale.mean()),
+                     float(diff_scale.min()), float(diff_scale.max()))
 
         opt = get_optimizer(model, cfg.opt, len(train_data))
         jax.block_until_ready(opt)
@@ -251,7 +253,7 @@ def _spectra_figure(
 
 
 def _log_rollout_eval(
-    model, cfg: RegressionTraining, run, step: int, diff_scale: float = 1.0
+    model, cfg: RegressionTraining, run, step: int, diff_scale=1.0
 ):
     traj_data, traj_param, _ = load_trajectory_zarr(
         cfg.rollout_data, n=cfg.n_rollout

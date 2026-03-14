@@ -147,7 +147,7 @@ def get_regression_model(cfg: RegressionTraining, rngs=None):
 
 
 def regression_rollout(
-    model, x0, time_vector, param, mode: str, diff_scale: float = 1.0
+    model, x0, time_vector, param, mode: str, diff_scale=1.0
 ):
     """Roll out a one-step regression model from initial conditions.
 
@@ -164,12 +164,14 @@ def regression_rollout(
       numpy array of shape (n_time, n_rollout, *state_shape)
     """
 
+    _diff_scale = jnp.array(diff_scale)
+
     @jax.jit
     def step(x, t_val):
         t = jnp.full((x.shape[0], 1), t_val, dtype=jnp.float32)
         pred = model(x, t, param.astype(jnp.float32)).astype(jnp.float32)
         if mode == "difference":
-            return x + diff_scale * pred
+            return x + _diff_scale * pred
         return pred
 
     n_time = len(time_vector)

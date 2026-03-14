@@ -164,7 +164,9 @@ class RegressionZarrData:
     def __init__(self, path: str, batch_size: int, block_size: int):
         assert batch_size % block_size == 0
         group = cast(zarr.Group, zarr.open(path, mode="r"))
-        self.diff_scale: float = float(group.attrs.get("diff_scale", 1.0))  # pyright: ignore[reportArgumentType]
+        self.diff_scale: np.ndarray = np.array(
+            group.attrs.get("diff_scale", 1.0), dtype=np.float32
+        )
         self._block_size = block_size
         self._batch_size = batch_size
         self._blocks_per_batch = batch_size // block_size

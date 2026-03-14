@@ -121,8 +121,8 @@ def _process(
 
     outfile = _make_outfile(output, n_samples, block_size, state_shape)
 
-    sum_diff = 0.0
-    sum_sq_diff = 0.0
+    sum_diff = np.zeros(state_shape, dtype=np.float64)
+    sum_sq_diff = np.zeros(state_shape, dtype=np.float64)
     count_diff = 0
 
     for traj_start in tqdm(
@@ -140,10 +140,10 @@ def _process(
             data_block, time_vector, param_block
         )
 
-        diff = nxt - cur
-        sum_diff += float(np.sum(diff))
-        sum_sq_diff += float(np.sum(diff**2))
-        count_diff += diff.size
+        diff = nxt - cur  # (n_pairs, *state_shape)
+        sum_diff += np.sum(diff, axis=0)
+        sum_sq_diff += np.sum(diff**2, axis=0)
+        count_diff += diff.shape[0]
 
         sample_start = traj_start * n_steps
         sample_end = traj_end * n_steps
@@ -153,9 +153,11 @@ def _process(
         outfile["param"][sample_start:sample_end] = param_flat  # pyright: ignore[reportArgumentType]
 
     mean_diff = sum_diff / count_diff
-    diff_scale = float(np.sqrt(sum_sq_diff / count_diff - mean_diff**2))
-    outfile.attrs["diff_scale"] = diff_scale
-    logging.info("diff_scale = %.6g", diff_scale)
+    diff_scale = np.sqrt(sum_sq_diff / count_diff - mean_diff**2)  # (*state_shape)
+    outfile.attrs["diff_scale"] = diff_scale.tolist()
+    logging.info("diff_scale shape=%s mean=%.6g min=%.6g max=%.6g",
+                 diff_scale.shape, float(diff_scale.mean()),
+                 float(diff_scale.min()), float(diff_scale.max()))
     return block_size
 
 
