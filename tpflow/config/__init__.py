@@ -76,6 +76,7 @@ class RegressionTraining:
     cond_end: float = 1.0
     eval_interval: int = 50
     n_rollout: int = 16
+    zero_mean_rollout: bool = False  # subtract spatial mean after each step (e.g. vorticity)
     data_type: str = "hist"  # 'hist' or 'field'
     # Scalar statistics to compare in rollout eval.  Any subset of:
     # "first_moment", "enstrophy", "kurtosis"

@@ -147,7 +147,8 @@ def get_regression_model(cfg: RegressionTraining, rngs=None):
 
 
 def regression_rollout(
-    model, x0, time_vector, param, mode: str, diff_scale=1.0
+    model, x0, time_vector, param, mode: str, diff_scale=1.0,
+    zero_mean: bool = False,
 ):
     """Roll out a one-step regression model from initial conditions.
 
@@ -159,20 +160,27 @@ def regression_rollout(
       mode:        'step' or 'difference'
       diff_scale:  std(x_next - x) from training data; used to undo target
                    normalisation in difference mode (x_{t+1} = x_t + diff_scale * pred)
+      zero_mean:   if True, subtract the spatial mean after each step to enforce
+                   the zero-mean conservation law (e.g. vorticity on a periodic domain)
 
     Returns:
       numpy array of shape (n_time, n_rollout, *state_shape)
     """
 
     _diff_scale = jnp.array(diff_scale)
+    spatial_axes = tuple(range(1, 1 + len(x0.shape) - 1))  # all axes except batch
 
     @jax.jit
     def step(x, t_val):
         t = jnp.full((x.shape[0], 1), t_val, dtype=jnp.float32)
         pred = model(x, t, param.astype(jnp.float32)).astype(jnp.float32)
         if mode == "difference":
-            return x + _diff_scale * pred
-        return pred
+            x_next = x + _diff_scale * pred
+        else:
+            x_next = pred
+        if zero_mean:
+            x_next = x_next - jnp.mean(x_next, axis=spatial_axes, keepdims=True)
+        return x_next
 
     n_time = len(time_vector)
     outs = np.zeros((n_time, *x0.shape))

@@ -188,6 +188,7 @@ kolflow-regression extras:
     "log_energy_spectra=true \
      energy_spectra.channel_axis=2 \
      'stats=[enstrophy,first_moment,kurtosis]' \
+     zero_mean_rollout=true \
      {{extras}}"
 
 hw2d-regression extras:

@@ -271,7 +271,8 @@ def _log_rollout_eval(
     param = jnp.array(traj_param[:, None])  # (n_rollout, 1)
 
     model.eval()
-    out = regression_rollout(model, x0, time_vector, param, cfg.mode, diff_scale)
+    out = regression_rollout(model, x0, time_vector, param, cfg.mode, diff_scale,
+                             zero_mean=cfg.zero_mean_rollout)
     # out: (n_time, n_rollout, *state_shape)
 
     if cfg.data_type == "hist":
