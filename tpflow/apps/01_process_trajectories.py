@@ -45,6 +45,46 @@ def main(cfg: TrajectoryProcessing) -> None:
             np.asarray(data_std),
         )
 
+        # Optional per-time normalization: one (mean, std) per (time step, channel),
+        # averaging over all trajectories and spatial dimensions.
+        # state_shape[-1] is treated as the channel axis.
+        pt_mean_bc: np.ndarray | None = None
+        pt_std_bc: np.ndarray | None = None
+        per_time_mean: np.ndarray | None = None
+        per_time_std: np.ndarray | None = None
+        if cfg.normalize_per_time:
+            n_traj_train = train_indata.shape[0]
+            n_time_train = train_indata.shape[1]
+            state_shape_train = train_indata.shape[2:]
+            n_channels = state_shape_train[-1]
+            n_spatial = len(state_shape_train) - 1
+            # axes in a (B, T, *state_shape) block to sum over: batch + all spatial
+            spatial_sum_axes = (0,) + tuple(range(2, 2 + n_spatial))
+            n_per_step = n_traj_train * int(np.prod(state_shape_train[:-1]))
+
+            sum_x = np.zeros((n_time_train, n_channels), dtype=np.float64)
+            sum_x2 = np.zeros((n_time_train, n_channels), dtype=np.float64)
+            for traj_start in tqdm(
+                range(0, n_traj_train, cfg.data.trajectory_block_size),
+                desc="Per-time stats",
+            ):
+                traj_end = min(traj_start + cfg.data.trajectory_block_size, n_traj_train)
+                block = np.array(train_indata[traj_start:traj_end]).astype(np.float64)
+                sum_x += np.sum(block, axis=spatial_sum_axes)
+                sum_x2 += np.sum(block ** 2, axis=spatial_sum_axes)
+            per_time_mean = sum_x / n_per_step                           # (n_time, C)
+            per_time_std = np.sqrt(sum_x2 / n_per_step - per_time_mean ** 2)
+            per_time_std = np.where(per_time_std == 0, 1.0, per_time_std)
+            logging.info(
+                "Per-time stats: mean range [%.4g, %.4g], std range [%.4g, %.4g]",
+                float(per_time_mean.min()), float(per_time_mean.max()),
+                float(per_time_std.min()), float(per_time_std.max()),
+            )
+            # Broadcast shape (1, n_time, 1, ..., 1, C) — same for both splits
+            bc_shape = (1, n_time_train) + (1,) * n_spatial + (n_channels,)
+            pt_mean_bc = per_time_mean.reshape(bc_shape)
+            pt_std_bc = per_time_std.reshape(bc_shape)
+
         for split in ["train", "test"]:
             in_filename = join(basedir, "raw_trajectories", split + ".zarr")
             out_filename = join(basedir, "cfm_train_data", split + ".zarr")
@@ -66,6 +106,9 @@ def main(cfg: TrajectoryProcessing) -> None:
             if split == "train":
                 outfile.attrs["data_mean"] = np.asarray(data_mean).tolist()
                 outfile.attrs["data_std"] = np.asarray(data_std).tolist()
+                if per_time_mean is not None:
+                    outfile.attrs["per_time_mean"] = per_time_mean.tolist()
+                    outfile.attrs["per_time_std"] = per_time_std.tolist()  # type: ignore[union-attr]
 
             time_vector = np.array(infile["time"])
             for traj_start in tqdm(
@@ -73,9 +116,11 @@ def main(cfg: TrajectoryProcessing) -> None:
                 desc="Flatten trajectories",
             ):
                 traj_end = min(traj_start + cfg.data.trajectory_block_size, n_traj)
-                data_block = (
-                    np.array(indata[traj_start:traj_end]) - data_mean
-                ) / data_std
+                raw_block = np.array(indata[traj_start:traj_end])
+                if pt_mean_bc is not None and pt_std_bc is not None:
+                    data_block = (raw_block - pt_mean_bc) / pt_std_bc
+                else:
+                    data_block = (raw_block - data_mean) / data_std
                 param_block = np.array(inparam[traj_start:traj_end])
 
                 flat_data, flat_time, flat_param = flatten_trajectories(

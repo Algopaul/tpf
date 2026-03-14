@@ -35,6 +35,11 @@ class TrajectoryProcessing:
     tag: str = "default"
     data: DataConfig = field(default_factory=DataConfig)
     dryrun: bool = False
+    # Normalize each time step independently: one mean/std per (time, channel),
+    # averaging over spatial dims.  Useful when field amplitude grows strongly over
+    # the conditioning axis (e.g. hw2d).  Stored in train.zarr attrs as
+    # per_time_mean / per_time_std of shape (n_time, C).
+    normalize_per_time: bool = False
     wandb: WandbConfig = field(default_factory=WandbConfig)
 
 

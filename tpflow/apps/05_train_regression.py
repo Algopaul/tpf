@@ -263,9 +263,18 @@ def _log_rollout_eval(
 
     if cfg.norm_stats_path:
         stats = zarr.open(cfg.norm_stats_path, mode="r")
-        data_mean = np.asarray(stats.attrs["data_mean"])
-        data_std = np.asarray(stats.attrs["data_std"])
-        traj_data = (traj_data - data_mean) / data_std
+        if "per_time_mean" in stats.attrs:
+            # Per-time normalization: stats are (n_time, C); broadcast over rollout+spatial
+            per_time_mean = np.asarray(stats.attrs["per_time_mean"])  # (n_time, C)
+            per_time_std = np.asarray(stats.attrs["per_time_std"])
+            state_shape = traj_data.shape[2:]
+            n_spatial = len(state_shape) - 1
+            bc_shape = (1, n_time) + (1,) * n_spatial + (state_shape[-1],)
+            traj_data = (traj_data - per_time_mean.reshape(bc_shape)) / per_time_std.reshape(bc_shape)
+        else:
+            data_mean = np.asarray(stats.attrs["data_mean"])
+            data_std = np.asarray(stats.attrs["data_std"])
+            traj_data = (traj_data - data_mean) / data_std
 
     x0 = jnp.array(traj_data[:, 0])  # (n_rollout, *state_shape)
     param = jnp.array(traj_param[:, None])  # (n_rollout, 1)
