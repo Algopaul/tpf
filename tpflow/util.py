@@ -41,7 +41,7 @@ def log_duration(
     return decorator
 
 
-def init_wandb(cfg, job_type, data_name=None):
+def init_wandb(cfg, job_type, data_name=None, resume_run_id: str | None = None):
     config_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
     sid = os.environ.get("SLURM_JOB_ID")
     if sid is None:
@@ -49,6 +49,14 @@ def init_wandb(cfg, job_type, data_name=None):
     else:
         sid = "_" + str(sid)
     config_dict["slurm_id"] = sid  # pyright: ignore
+    if resume_run_id:
+        return wandb.init(
+            id=resume_run_id,
+            resume="must",
+            project="two-parameter-flow",
+            config=config_dict,  # pyright: ignore
+            mode=cfg.wandb.mode,
+        )
     if len(cfg.wandb.tag) > 0:
         tag = f"_{cfg.wandb.tag}"
     else:

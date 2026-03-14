@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 
+import wandb
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -211,6 +212,20 @@ def _save_checkpoint(
         json.dump(info, f, indent=2)
 
 
+def _find_latest_checkpoint(run_dir: str | Path) -> Path | None:
+    """Return the highest-numbered epoch subdirectory that contains checkpoint_info.json."""
+    run_dir = Path(run_dir)
+    candidates = sorted(
+        (
+            p
+            for p in run_dir.iterdir()
+            if p.is_dir() and p.name.isdigit() and (p / "checkpoint_info.json").exists()
+        ),
+        key=lambda p: int(p.name),
+    )
+    return candidates[-1] if candidates else None
+
+
 def _dataset_name_from_path(train_data_path: str) -> str:
     """Extract dataset name from a train_data path like .../datasets/{ds}/..."""
     parts = Path(train_data_path).parts
@@ -239,6 +254,7 @@ def store_regression_model(
             "sample_shape": list(sample_shape),
             "epoch": epoch,
             "data_name": _dataset_name_from_path(cfg.train_data),
+            "wandb_run_id": wandb.run.id if wandb.run else None,
         },
     )
 
@@ -330,5 +346,6 @@ def store_model(model, cfg, epoch, sample_shape: tuple):
             "data_name": cfg.data.name,
             "sample_shape": list(sample_shape),
             "epoch": epoch,
+            "wandb_run_id": wandb.run.id if wandb.run else None,
         },
     )

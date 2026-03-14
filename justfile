@@ -22,6 +22,29 @@ reg_process_defaults := "block_size=32"
 status ds extras="":
   {{py}} tpflow/tools/pipeline_status.py {{ds}} --extras "{{extras}}"
 
+# Resume gaurot CFM training from a checkpoint directory.
+# run_dir: path to a {run_dir}/{epoch}/ dir, or parent run dir (auto-picks latest epoch).
+# extras: any additional Hydra overrides (e.g. "+env=slurm" or "opt.epochs=2000").
+resume-gaurot-cfm run_dir extras="":
+  {{train_cfm}} --multi restart_from={{run_dir}} {{extras}}
+
+# Resume kolflow CFM training from a checkpoint directory.
+resume-kolflow-cfm run_dir extras="":
+  {{train_cfm}} {{field_cfm_defaults}} data.name=kolflow unet.base_ch=32 restart_from={{run_dir}} {{extras}}
+
+# Resume hw2d CFM training from a checkpoint directory.
+# Pass unet.base_ch=64 via extras if the original run used the larger model.
+resume-hw2d-cfm run_dir extras="":
+  {{train_cfm}} {{field_cfm_defaults}} data.name=hw2d unet.base_ch=32 unet.channels_inout=2 restart_from={{run_dir}} {{extras}}
+
+# Resume kolflow regression training from a checkpoint directory.
+resume-kolflow-regression run_dir extras="":
+  just kolflow-regression "restart_from={{run_dir}} {{extras}}"
+
+# Resume hw2d regression training from a checkpoint directory.
+resume-hw2d-regression run_dir extras="":
+  just hw2d-regression "restart_from={{run_dir}} {{extras}}"
+
 # Dry-run: show what would be deleted to restart from step N (1-5).
 # Pass yes=true to actually delete: just restart-from kolflow 3 yes=true
 restart-from ds step yes="":

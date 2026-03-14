@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 import hydra
 import jax
@@ -16,7 +17,7 @@ from tqdm import tqdm
 import wandb
 from tpflow.config import CFMTraining
 from tpflow.data import ZarrData, device_prefetch, get_data
-from tpflow.model import get_model, make_flow_fn, store_model
+from tpflow.model import _find_latest_checkpoint, get_model, load_checkpoint_info, load_model, make_flow_fn, store_model
 from tpflow.util import init_wandb, log_duration
 from tpflow.visualization import angle_color_coded, trace_video
 
@@ -64,10 +65,32 @@ def batch_prep(batch):
 @hydra.main(version_base=None, config_name="cfm", config_path="../../conf")
 @log_duration()
 def main(cfg: CFMTraining) -> None:
-    with init_wandb(cfg, "cfm-train") as run:
+    start_epoch = 0
+    resume_run_id = None
+    restart_path = None
+    if cfg.restart_from:
+        restart_path = Path(cfg.restart_from)
+        if not (restart_path / "checkpoint_info.json").exists():
+            restart_path = _find_latest_checkpoint(restart_path)
+            if restart_path is None:
+                raise FileNotFoundError(f"No checkpoints found under {cfg.restart_from}")
+        info = load_checkpoint_info(restart_path)
+        start_epoch = info["epoch"]
+        resume_run_id = info.get("wandb_run_id")
+        logging.info("Restarting from epoch %d at %s", start_epoch, restart_path)
+        if start_epoch >= cfg.opt.epochs:
+            logging.warning(
+                "start_epoch %d >= total epochs %d — nothing to train",
+                start_epoch, cfg.opt.epochs,
+            )
+
+    with init_wandb(cfg, "cfm-train", resume_run_id=resume_run_id) as run:
         logging.info("\n%s", OmegaConf.to_yaml(cfg))
         rngs = nnx.Rngs(0)
-        model = get_model(cfg, rngs=rngs)
+        if restart_path is not None:
+            model = load_model(restart_path)
+        else:
+            model = get_model(cfg, rngs=rngs)
         jax.block_until_ready(model)
         logging.info("Model loaded")
         data = ZarrData(cfg.data, "train")
@@ -87,7 +110,17 @@ def main(cfg: CFMTraining) -> None:
             velo_err,
             batch_prep=batch_prep,
         )
-        for epoch in range(cfg.opt.epochs):
+        if start_epoch > 0:
+            # Advance optimizer step counters so the LR schedule resumes at the
+            # correct position rather than restarting warmup from step 0.
+            steps_done = start_epoch * len(data)
+            state = jax.tree_util.tree_map(
+                lambda x: jnp.array(steps_done, dtype=x.dtype)
+                if (x.shape == () and jnp.issubdtype(x.dtype, jnp.integer))
+                else x,
+                state,
+            )
+        for epoch in range(start_epoch, cfg.opt.epochs):
             model.train()
             keys = jrd.split(rngs.param(), len(data))
             ep_data = device_prefetch(data.iter_batches(epoch))

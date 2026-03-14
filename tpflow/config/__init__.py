@@ -84,6 +84,7 @@ class RegressionTraining:
     log_energy_spectra: bool = False
     energy_spectra: EnergySpectraConfig = field(default_factory=EnergySpectraConfig)
     wandb: WandbConfig = field(default_factory=WandbConfig)
+    restart_from: str = ""  # path to a {run_dir}/{epoch}/ checkpoint dir; "" = fresh start
 
 
 @dataclass
@@ -138,6 +139,7 @@ class CFMTraining:
     conditioning_reg: float = 0.0
     conditioning_stepsize: float = 1e-4
     eval_interval: int = 50
+    restart_from: str = ""  # path to a {run_dir}/{epoch}/ checkpoint dir; "" = fresh start
 
 
 unet_deep = UNetConfig(
