@@ -5,23 +5,24 @@ import hydra
 import jax
 import jax.numpy as jnp
 import jax.random as jrd
-import numpy as np
-import zarr
 from flanch import Recorder, get_optimizer
 from flanch.optimizer import get_train_step
 from flax import nnx
-from hdfv.histogram_videos import histogram_frames
-from hdfv.images import frame_rgb, grid_shape
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
-import wandb
 from tpflow.config import CFMTraining
 from tpflow.data import ZarrData, device_prefetch, get_data
-from tpflow.model import _find_latest_checkpoint, get_model, load_checkpoint_info, load_model, make_flow_fn, store_model
+from tpflow.eval import export_cfm_eval, log_cfm_eval, run_cfm_eval
+from tpflow.model import (
+    advance_opt_steps,
+    get_model,
+    load_model,
+    restart_state,
+    store_model,
+)
 from tpflow.util import init_wandb, log_duration
-from tpflow.visualization import angle_color_coded, trace_video
 
 
 def get_velo_err(cfg: CFMTraining):
@@ -67,17 +68,11 @@ def batch_prep(batch):
 @hydra.main(version_base=None, config_name="cfm", config_path="../../conf")
 @log_duration()
 def main(cfg: CFMTraining) -> None:
+    run_dir = Path(HydraConfig.get().runtime.output_dir)
     start_epoch = 0
     restart_path = None
     if cfg.restart_from:
-        restart_path = Path(cfg.restart_from).resolve()
-        if not (restart_path / "checkpoint_info.json").exists():
-            restart_path = _find_latest_checkpoint(restart_path)
-            if restart_path is None:
-                raise FileNotFoundError(f"No checkpoints found under {cfg.restart_from}")
-        info = load_checkpoint_info(restart_path)
-        start_epoch = info["epoch"]
-        logging.info("Restarting from epoch %d at %s", start_epoch, restart_path)
+        start_epoch, restart_path = restart_state(cfg.restart_from)
         if start_epoch >= cfg.opt.epochs:
             logging.warning(
                 "start_epoch %d >= total epochs %d — nothing to train",
@@ -111,15 +106,8 @@ def main(cfg: CFMTraining) -> None:
             batch_prep=batch_prep,
         )
         if start_epoch > 0:
-            # Advance optimizer step counters so the LR schedule resumes at the
-            # correct position rather than restarting warmup from step 0.
-            steps_done = start_epoch * len(data)
-            state = jax.tree_util.tree_map(
-                lambda x: jnp.array(steps_done, dtype=x.dtype)
-                if (x.shape == () and jnp.issubdtype(x.dtype, jnp.integer))
-                else x,
-                state,
-            )
+            state = advance_opt_steps(state, start_epoch * len(data))
+
         for epoch in range(start_epoch, cfg.opt.epochs):
             model.train()
             keys = jrd.split(rngs.param(), len(data))
@@ -152,44 +140,10 @@ def main(cfg: CFMTraining) -> None:
 
             if (epoch + 1) % cfg.eval_interval == 0:
                 sample_shape = batch["data"].shape[1:]
-                store_model(model, cfg, epoch + 1, sample_shape)
-                source_batch = jrd.normal(
-                    jrd.key(0),
-                    (cfg.inference.n_samples, *sample_shape),
-                )
-                cslist = jnp.linspace(0, 1, cfg.inference.n_param_steps)
-                run_fn = make_flow_fn(model, n_steps=cfg.inference.n_param_steps)
-                out = np.array(run_fn(source_batch, cslist))
-                eval_dir = Path(HydraConfig.get().runtime.output_dir) / f"{epoch + 1}" / "eval"
-                eval_dir.mkdir(parents=True, exist_ok=True)
-                traj_store = zarr.open_group(str(eval_dir / "trajectories.zarr"), mode="w")
-                traj_store.create_array("data", data=out.astype(np.float32), chunks=(1, *out.shape[1:]))
-                traj_store.create_array("conditioning", data=np.array(cslist, dtype=np.float32))
-                if cfg.data.type == "hist":
-                    # Histogram video
-                    frames = histogram_frames(out)
-                    video = np.transpose(frames, (0, 3, 1, 2))
-                    video = wandb.Video(video, fps=30, format="mp4")
-                    run.log({"train/cfm_trajectories": video}, step=epoch + 1)
-                    # Trace video
-                    frames = trace_video(out[:, :200, :])
-                    video = np.transpose(frames, (0, 3, 1, 2))
-                    video = wandb.Video(video, fps=20, format="mp4")
-                    run.log({"train/traces": video}, step=epoch + 1)
-                    # Color coded Gaussians
-                    frames = angle_color_coded(out, source_batch)
-                    video = np.transpose(frames, (0, 3, 1, 2))
-                    video = wandb.Video(video, fps=20, format="mp4")
-                    run.log({"train/colorcoded": video}, step=epoch + 1)
-                elif cfg.data.type == "field":
-                    nrows, ncols = grid_shape(cfg.inference.n_samples)
-                    frames = [
-                        frame_rgb(o, grid=True, nrows=nrows, ncols=ncols, channel=0)
-                        for o in out
-                    ]
-                    video = np.transpose(frames, (0, 3, 1, 2))
-                    video = wandb.Video(video, fps=30, format="mp4")
-                    run.log({"train/cfm_trajectories": video}, step=epoch + 1)
+                store_model(model, cfg, epoch + 1, sample_shape, run_dir)
+                eval_result = run_cfm_eval(model, cfg, sample_shape)
+                export_cfm_eval(eval_result, run_dir / f"{epoch + 1}" / "eval")
+                log_cfm_eval(eval_result, run, cfg, epoch + 1)
 
 
 if __name__ == "__main__":

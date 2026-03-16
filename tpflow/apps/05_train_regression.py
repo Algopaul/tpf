@@ -30,37 +30,30 @@ from pathlib import Path
 
 import hydra
 import jax
-import zarr
 import jax.numpy as jnp
-from hydra.core.hydra_config import HydraConfig
 import jax.random as jrd
-import matplotlib.pyplot as plt
 import numpy as np
 from flanch import Recorder, get_optimizer
 from flanch.optimizer import get_train_step
 from flax import nnx
-from hdfv.images import frame_rgb, grid_shape
+from hydra.core.hydra_config import HydraConfig
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
-import wandb
 from tpflow.config import RegressionTraining
 from tpflow.data import RegressionZarrData, device_prefetch, get_regression_val_data
+from tpflow.eval import export_regression_eval, log_regression_eval, run_regression_eval
 from tpflow.model import (
-    _find_latest_checkpoint,
+    advance_opt_steps,
     get_regression_model,
-    load_checkpoint_info,
     load_regression_model,
-    regression_rollout,
+    restart_state,
     store_regression_model,
 )
-from tpflow.processing import load_trajectory_zarr
-from tpflow.statistics import energy_spectra, hw2d_statistics, trajectory_statistics
 from tpflow.util import init_wandb, log_duration
-from tpflow.visualization import trace_video
 
 
-def get_regression_loss(mode: str, diff_scale=1.0):
+def get_regression_loss(mode: str, diff_scale: np.ndarray | float = 1.0):
 
     def regression_loss(model, batch):
         x, x_next, time, param = batch
@@ -94,17 +87,11 @@ def batch_prep(batch):
 @hydra.main(version_base=None, config_name="regression", config_path="../../conf")
 @log_duration()
 def main(cfg: RegressionTraining) -> None:
+    run_dir = Path(HydraConfig.get().runtime.output_dir)
     start_epoch = 0
     restart_path = None
     if cfg.restart_from:
-        restart_path = Path(cfg.restart_from).resolve()
-        if not (restart_path / "checkpoint_info.json").exists():
-            restart_path = _find_latest_checkpoint(restart_path)
-            if restart_path is None:
-                raise FileNotFoundError(f"No checkpoints found under {cfg.restart_from}")
-        info = load_checkpoint_info(restart_path)
-        start_epoch = info["epoch"]
-        logging.info("Restarting from epoch %d at %s", start_epoch, restart_path)
+        start_epoch, restart_path = restart_state(cfg.restart_from)
         if start_epoch >= cfg.opt.epochs:
             logging.warning(
                 "start_epoch %d >= total epochs %d — nothing to train",
@@ -152,15 +139,7 @@ def main(cfg: RegressionTraining) -> None:
             batch_prep=batch_prep,
         )
         if start_epoch > 0:
-            # Advance optimizer step counters so the LR schedule resumes at the
-            # correct position rather than restarting warmup from step 0.
-            steps_done = start_epoch * len(train_data)
-            state = jax.tree_util.tree_map(
-                lambda x: jnp.array(steps_done, dtype=x.dtype)
-                if (x.shape == () and jnp.issubdtype(x.dtype, jnp.integer))
-                else x,
-                state,
-            )
+            state = advance_opt_steps(state, start_epoch * len(train_data))
 
         for epoch in range(start_epoch, cfg.opt.epochs):
             model.train()
@@ -182,8 +161,7 @@ def main(cfg: RegressionTraining) -> None:
 
             model, opt, avg_metric = nnx.merge(graphdef, state)
             logging.info("Epoch %d: Avg. loss %.4e", epoch + 1, avg_metric.compute())
-            # Skip first batch (cold start) before logging timing stats
-            lt = np.array(load_times[1:]) * 1000  # ms
+            lt = np.array(load_times[1:]) * 1000
             dt = np.array(dispatch_times[1:]) * 1000
             run.log({
                 "train/avg_loss": avg_metric.compute(),
@@ -209,186 +187,10 @@ def main(cfg: RegressionTraining) -> None:
             val_err.reset()
 
             if (epoch + 1) % cfg.eval_interval == 0:
-                store_regression_model(model, cfg, epoch + 1, sample_shape)
-                _log_rollout_eval(model, cfg, run, epoch + 1, diff_scale)
-
-
-def _spectra_figure(
-    bin_centers: np.ndarray,
-    rollout_spectra: np.ndarray,
-    ref_spectra: np.ndarray,
-):
-    """Mean ± std energy spectrum plot comparing rollout and reference.
-
-    Averages over the time axis before computing ensemble statistics, giving
-    a single stationary spectrum per trajectory.
-
-    Args:
-        bin_centers:     ``(n_bins,)`` wavenumber bin centres.
-        rollout_spectra: ``(n_time, n_rollout, n_bins)`` from the model.
-        ref_spectra:     ``(n_time, n_rollout, n_bins)`` from reference data.
-
-    Returns:
-        Matplotlib figure (caller is responsible for closing it).
-    """
-    # Average over time → (n_rollout, n_bins), then mean/std over ensemble
-    r = np.mean(rollout_spectra, axis=0)   # (n_rollout, n_bins)
-    f = np.mean(ref_spectra, axis=0)       # (n_rollout, n_bins)
-    rm, rs = np.mean(r, axis=0), np.std(r, axis=0)
-    fm, fs = np.mean(f, axis=0), np.std(f, axis=0)
-
-    fig, ax = plt.subplots(figsize=(6, 3))
-    ax.fill_between(bin_centers, rm - rs, rm + rs, alpha=0.25, color="tab:blue")
-    ax.plot(bin_centers, rm, color="tab:blue", label="rollout")
-    ax.fill_between(bin_centers, fm - fs, fm + fs, alpha=0.25, color="tab:orange")
-    ax.plot(bin_centers, fm, color="tab:orange", linestyle="--", label="reference")
-    ax.set_yscale("log")
-    ax.set_xlabel("wavenumber")
-    ax.set_ylabel("power")
-    ax.set_title("energy spectra")
-    ax.legend()
-    fig.tight_layout()
-    return fig
-
-
-def _log_rollout_eval(
-    model, cfg: RegressionTraining, run, step: int, diff_scale=1.0
-):
-    traj_data, traj_param, _ = load_trajectory_zarr(
-        cfg.rollout_data, n=cfg.n_rollout
-    )
-    n_time = traj_data.shape[1]
-    time_vector = np.linspace(cfg.cond_start, cfg.cond_end, n_time, dtype=np.float32)
-
-    if cfg.norm_stats_path:
-        stats = zarr.open(cfg.norm_stats_path, mode="r")
-        if "per_time_mean" in stats.attrs:
-            # Per-time normalization: stats are (n_time, C); broadcast over rollout+spatial
-            per_time_mean = np.asarray(stats.attrs["per_time_mean"])  # (n_time, C)
-            per_time_std = np.asarray(stats.attrs["per_time_std"])
-            state_shape = traj_data.shape[2:]
-            n_spatial = len(state_shape) - 1
-            bc_shape = (1, n_time) + (1,) * n_spatial + (state_shape[-1],)
-            traj_data = (traj_data - per_time_mean.reshape(bc_shape)) / per_time_std.reshape(bc_shape)
-        else:
-            data_mean = np.asarray(stats.attrs["data_mean"])
-            data_std = np.asarray(stats.attrs["data_std"])
-            traj_data = (traj_data - data_mean) / data_std
-
-    x0 = jnp.array(traj_data[:, 0])  # (n_rollout, *state_shape)
-    param = jnp.array(traj_param[:, None])  # (n_rollout, 1)
-
-    model.eval()
-    out = regression_rollout(model, x0, time_vector, param, cfg.mode, diff_scale,
-                             zero_mean=cfg.zero_mean_rollout)
-    # out: (n_time, n_rollout, *state_shape)
-
-    if cfg.data_type == "hist":
-        frames = trace_video(out)  # expects (n_time, n_particles, 2)
-        video = np.array(np.transpose(frames, (0, 3, 1, 2)))
-        run.log({"eval/rollout": wandb.Video(video, fps=20, format="mp4")}, step=step)
-    elif cfg.data_type == "field":
-        nrows, ncols = grid_shape(cfg.n_rollout)
-        frames = [
-            frame_rgb(o, grid=True, nrows=nrows, ncols=ncols, channel=0) for o in out
-        ]
-        video = np.array(np.transpose(frames, (0, 3, 1, 2)))
-        run.log({"eval/rollout": wandb.Video(video, fps=30, format="mp4")}, step=step)
-
-    # reference: (n_rollout, n_time, *state) → (n_time, n_rollout, *state)
-    ref = np.moveaxis(traj_data, 0, 1)
-
-    eval_dir = Path(HydraConfig.get().runtime.output_dir) / f"{step}" / "eval"
-    eval_dir.mkdir(parents=True, exist_ok=True)
-    out_np = np.array(out)
-    rollout_store = zarr.open_group(str(eval_dir / "rollout.zarr"), mode="w")
-    rollout_store.create_array("rollout", data=out_np.astype(np.float32), chunks=(1, *out_np.shape[1:]))
-    rollout_store.create_array("reference", data=ref.astype(np.float32), chunks=(1, *ref.shape[1:]))
-    rollout_store.create_array("time", data=time_vector)
-    rollout_store.create_array("param", data=np.array(traj_param, dtype=np.float32))
-
-    if cfg.stats:
-        if cfg.dataset == "hw2d":
-            rollout_stats = hw2d_statistics(out)
-            ref_stats = hw2d_statistics(ref)
-        else:
-            rollout_stats = trajectory_statistics(out)
-            ref_stats = trajectory_statistics(ref)
-        stats_store = zarr.open_group(str(eval_dir / "statistics.zarr"), mode="w")
-        for stat_name, vals in rollout_stats.items():
-            stats_store.create_array(f"rollout_{stat_name}", data=vals.astype(np.float32))
-            stats_store.create_array(f"ref_{stat_name}", data=ref_stats[stat_name].astype(np.float32))
-        for stat_name in cfg.stats:
-            if stat_name not in rollout_stats:
-                logging.warning("Unknown stat %r — skipping", stat_name)
-                continue
-            fig = _stats_figure(
-                stat_name, rollout_stats[stat_name], ref_stats[stat_name], time_vector
-            )
-            run.log({f"eval/{stat_name}": wandb.Image(fig)}, step=step)
-            plt.close(fig)
-
-    if cfg.log_energy_spectra:
-        ch_axis = cfg.energy_spectra.channel_axis
-        channel_axis = ch_axis if ch_axis >= 0 else None
-        rollout_bins, rollout_spectra = energy_spectra(
-            out,
-            n_bins=cfg.energy_spectra.n_bins,
-            log_bins=cfg.energy_spectra.log_bins,
-            channel_axis=channel_axis,
-            channel_idx=cfg.energy_spectra.channel_idx,
-        )
-        _, ref_spectra = energy_spectra(
-            ref,
-            n_bins=cfg.energy_spectra.n_bins,
-            log_bins=cfg.energy_spectra.log_bins,
-            channel_axis=channel_axis,
-            channel_idx=cfg.energy_spectra.channel_idx,
-        )
-        spectra_store = zarr.open_group(str(eval_dir / "energy_spectra.zarr"), mode="w")
-        spectra_store.create_array("bin_centers", data=rollout_bins.astype(np.float32))
-        spectra_store.create_array("rollout_spectra", data=rollout_spectra.astype(np.float32))
-        spectra_store.create_array("ref_spectra", data=ref_spectra.astype(np.float32))
-        fig = _spectra_figure(rollout_bins, rollout_spectra, ref_spectra)
-        run.log({"eval/energy_spectra": wandb.Image(fig)}, step=step)
-        plt.close(fig)
-
-
-def _stats_figure(
-    stat_name: str,
-    rollout_vals: np.ndarray,
-    ref_vals: np.ndarray,
-    time_vector: np.ndarray,
-):
-    """Create a mean ± std plot comparing rollout and reference ensembles.
-
-    Args:
-        stat_name:    name used for the y-axis label and title
-        rollout_vals: ``(n_time, n_rollout)`` from the model
-        ref_vals:     ``(n_time, n_rollout)`` from the reference data
-        time_vector:  ``(n_time,)`` x-axis values
-
-    Returns:
-        Matplotlib figure (caller is responsible for closing it).
-    """
-    t = time_vector
-
-    rm = np.mean(rollout_vals, axis=1)
-    rs = np.std(rollout_vals, axis=1)
-    fm = np.mean(ref_vals, axis=1)
-    fs = np.std(ref_vals, axis=1)
-
-    fig, ax = plt.subplots(figsize=(6, 3))
-    ax.fill_between(t, rm - rs, rm + rs, alpha=0.25, color="tab:blue")
-    ax.plot(t, rm, color="tab:blue", label="rollout")
-    ax.fill_between(t, fm - fs, fm + fs, alpha=0.25, color="tab:orange")
-    ax.plot(t, fm, color="tab:orange", linestyle="--", label="reference")
-    ax.set_xlabel("time")
-    ax.set_ylabel(stat_name)
-    ax.set_title(stat_name)
-    ax.legend()
-    fig.tight_layout()
-    return fig
+                store_regression_model(model, cfg, epoch + 1, sample_shape, run_dir, diff_scale)
+                eval_result = run_regression_eval(model, cfg, diff_scale)
+                export_regression_eval(eval_result, run_dir / f"{epoch + 1}" / "eval")
+                log_regression_eval(eval_result, run, cfg, epoch + 1)
 
 
 if __name__ == "__main__":

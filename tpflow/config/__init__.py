@@ -134,6 +134,13 @@ class CondTrajConfig:
 
 
 @dataclass
+class ExportEvalConfig:
+    checkpoint: str = "MISSING"  # path to {run_dir}/{epoch}/ checkpoint directory
+    rollout_data: str = ""        # override rollout_data path (regression only)
+    eval_dir: str = ""            # override output dir; default: {checkpoint}/eval/
+
+
+@dataclass
 class CFMTraining:
     model_type: str = "mlp"
     mlp: MLPConfig = field(default_factory=MLPConfig)
@@ -179,6 +186,7 @@ unet_xs = UNetConfig(
 )
 
 cs = ConfigStore.instance()
+cs.store(name="export_eval", node=ExportEvalConfig)
 cs.store(name="benchmark", node=BenchmarkConfig)
 cs.store(name="wds_convert", node=WDSConvertConfig)
 cs.store(name="cond_traj", node=CondTrajConfig)

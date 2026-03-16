@@ -5,6 +5,7 @@ train_cfm    := py + " ./tpflow/apps/02_train_cfm.py"
 gen_traj     := py + " ./tpflow/apps/03_gen_cond_trajectories.py"
 process_reg  := py + " ./tpflow/apps/04_process_regression_data.py"
 train_reg    := py + " ./tpflow/apps/05_train_regression.py"
+export_eval  := py + " ./tpflow/apps/06_export_eval.py"
 
 # ── shared defaults ────────────────────────────────────────────────────────────
 # data.block_size sets the inner zarr chunk size (~2 MB target via auto_block_sizes).
@@ -17,6 +18,13 @@ field_cfm_defaults := "-cn imgrot --multi inference.n_samples=36"
 reg_process_defaults := "block_size=32"
 
 # ── pipeline status ────────────────────────────────────────────────────────────
+# Re-export zarr eval data for an existing checkpoint (auto-detects CFM vs regression).
+# checkpoint: path to {run_dir}/{epoch}/ checkpoint directory.
+# extras: optional Hydra overrides, e.g. "+env=slurm" or "rollout_data=/new/path"
+export-eval checkpoint extras="":
+  {{export_eval}} --multi checkpoint={{checkpoint}} {{extras}}
+
+
 # Show progress and print the next command for a field dataset.
 # extras: optional args appended to the suggested command (e.g. "+env=slurm")
 status ds extras="":

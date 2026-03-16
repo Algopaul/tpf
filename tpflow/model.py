@@ -1,14 +1,12 @@
 import logging
 from pathlib import Path
 
-import wandb
 import jax
 import jax.numpy as jnp
 import numpy as np
 import orbax.checkpoint as ocp
 from flanch.model import EmbMLP, UNet
 from flax import nnx
-from hydra.core.hydra_config import HydraConfig
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
@@ -147,7 +145,8 @@ def get_regression_model(cfg: RegressionTraining, rngs=None):
 
 
 def regression_rollout(
-    model, x0, time_vector, param, mode: str, diff_scale=1.0,
+    model, x0, time_vector, param, mode: str,
+    diff_scale: np.ndarray | float = 1.0,
     zero_mean: bool = False,
 ):
     """Roll out a one-step regression model from initial conditions.
@@ -236,6 +235,37 @@ def _find_latest_checkpoint(run_dir: str | Path) -> Path | None:
     return candidates[-1] if candidates else None
 
 
+def restart_state(restart_from: str | Path) -> tuple[int, Path]:
+    """Resolve a restart path and return ``(start_epoch, checkpoint_dir)``.
+
+    Accepts either a direct ``{run_dir}/{epoch}/`` checkpoint directory or a
+    parent run directory, in which case the latest epoch is selected.
+    """
+    restart_path = Path(restart_from).resolve()
+    if not (restart_path / "checkpoint_info.json").exists():
+        restart_path = _find_latest_checkpoint(restart_path)
+        if restart_path is None:
+            raise FileNotFoundError(f"No checkpoints found under {restart_from}")
+    info = load_checkpoint_info(restart_path)
+    start_epoch = info["epoch"]
+    logging.info("Restarting from epoch %d at %s", start_epoch, restart_path)
+    return start_epoch, restart_path
+
+
+def advance_opt_steps(state, n_steps: int):
+    """Set integer scalar leaves in the optimizer state to n_steps.
+
+    Positions the LR schedule at the correct step when resuming training
+    without replaying the full optimizer history.
+    """
+    return jax.tree_util.tree_map(
+        lambda x: jnp.array(n_steps, dtype=x.dtype)
+        if (x.shape == () and jnp.issubdtype(x.dtype, jnp.integer))
+        else x,
+        state,
+    )
+
+
 def _dataset_name_from_path(train_data_path: str) -> str:
     """Extract dataset name from a train_data path like .../datasets/{ds}/..."""
     parts = Path(train_data_path).parts
@@ -247,26 +277,22 @@ def _dataset_name_from_path(train_data_path: str) -> str:
 
 
 def store_regression_model(
-    model, cfg: RegressionTraining, epoch: int, sample_shape: tuple
+    model, cfg: RegressionTraining, epoch: int, sample_shape: tuple,
+    output_dir: str | Path,
+    diff_scale: np.ndarray | float | None = None,
 ):
-    run_dir = HydraConfig.get().runtime.output_dir
-    logging.info("Storing regression model at %s", run_dir)
-    _save_checkpoint(
-        model,
-        cfg,
-        epoch,
-        sample_shape,
-        output_dir=run_dir,
-        info={
-            "model_type": cfg.model_type,
-            "time_conditioned": cfg.time_conditioned,
-            "mode": cfg.mode,
-            "sample_shape": list(sample_shape),
-            "epoch": epoch,
-            "data_name": _dataset_name_from_path(cfg.train_data),
-            "wandb_run_id": wandb.run.id if wandb.run else None,
-        },
-    )
+    logging.info("Storing regression model at %s", output_dir)
+    info: dict = {
+        "model_type": cfg.model_type,
+        "time_conditioned": cfg.time_conditioned,
+        "mode": cfg.mode,
+        "sample_shape": list(sample_shape),
+        "epoch": epoch,
+        "data_name": _dataset_name_from_path(cfg.train_data),
+    }
+    if diff_scale is not None:
+        info["diff_scale"] = diff_scale if isinstance(diff_scale, float) else np.asarray(diff_scale).tolist()
+    _save_checkpoint(model, cfg, epoch, sample_shape, output_dir=output_dir, info=info)
 
 
 def load_regression_model(checkpoint_dir: str | Path):
@@ -342,20 +368,18 @@ def load_model(checkpoint_dir: str | Path):
     return nnx.merge(graphdef, state)
 
 
-def store_model(model, cfg, epoch, sample_shape: tuple):
-    run_dir = HydraConfig.get().runtime.output_dir
-    logging.info("Storing model at %s", run_dir)
+def store_model(model, cfg, epoch, sample_shape: tuple, output_dir: str | Path):
+    logging.info("Storing model at %s", output_dir)
     _save_checkpoint(
         model,
         cfg,
         epoch,
         sample_shape,
-        output_dir=run_dir,
+        output_dir=output_dir,
         info={
             "model_type": cfg.model_type,
             "data_name": cfg.data.name,
             "sample_shape": list(sample_shape),
             "epoch": epoch,
-            "wandb_run_id": wandb.run.id if wandb.run else None,
         },
     )
