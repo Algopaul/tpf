@@ -68,7 +68,6 @@ def batch_prep(batch):
 @log_duration()
 def main(cfg: CFMTraining) -> None:
     start_epoch = 0
-    resume_run_id = None
     restart_path = None
     if cfg.restart_from:
         restart_path = Path(cfg.restart_from).resolve()
@@ -78,7 +77,6 @@ def main(cfg: CFMTraining) -> None:
                 raise FileNotFoundError(f"No checkpoints found under {cfg.restart_from}")
         info = load_checkpoint_info(restart_path)
         start_epoch = info["epoch"]
-        resume_run_id = info.get("wandb_run_id")
         logging.info("Restarting from epoch %d at %s", start_epoch, restart_path)
         if start_epoch >= cfg.opt.epochs:
             logging.warning(
@@ -86,7 +84,7 @@ def main(cfg: CFMTraining) -> None:
                 start_epoch, cfg.opt.epochs,
             )
 
-    with init_wandb(cfg, "cfm-train", resume_run_id=resume_run_id) as run:
+    with init_wandb(cfg, "cfm-train") as run:
         logging.info("\n%s", OmegaConf.to_yaml(cfg))
         rngs = nnx.Rngs(0)
         if restart_path is not None:
