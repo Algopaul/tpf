@@ -32,6 +32,7 @@ import hydra
 import jax
 import zarr
 import jax.numpy as jnp
+from hydra.core.hydra_config import HydraConfig
 import jax.random as jrd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -299,6 +300,15 @@ def _log_rollout_eval(
     # reference: (n_rollout, n_time, *state) → (n_time, n_rollout, *state)
     ref = np.moveaxis(traj_data, 0, 1)
 
+    eval_dir = Path(HydraConfig.get().runtime.output_dir) / f"{step}" / "eval"
+    eval_dir.mkdir(parents=True, exist_ok=True)
+    out_np = np.array(out)
+    rollout_store = zarr.open_group(str(eval_dir / "rollout.zarr"), mode="w")
+    rollout_store.create_array("rollout", data=out_np.astype(np.float32), chunks=(1, *out_np.shape[1:]))
+    rollout_store.create_array("reference", data=ref.astype(np.float32), chunks=(1, *ref.shape[1:]))
+    rollout_store.create_array("time", data=time_vector)
+    rollout_store.create_array("param", data=np.array(traj_param, dtype=np.float32))
+
     if cfg.stats:
         if cfg.dataset == "hw2d":
             rollout_stats = hw2d_statistics(out)
@@ -306,6 +316,10 @@ def _log_rollout_eval(
         else:
             rollout_stats = trajectory_statistics(out)
             ref_stats = trajectory_statistics(ref)
+        stats_store = zarr.open_group(str(eval_dir / "statistics.zarr"), mode="w")
+        for stat_name, vals in rollout_stats.items():
+            stats_store.create_array(f"rollout_{stat_name}", data=vals.astype(np.float32))
+            stats_store.create_array(f"ref_{stat_name}", data=ref_stats[stat_name].astype(np.float32))
         for stat_name in cfg.stats:
             if stat_name not in rollout_stats:
                 logging.warning("Unknown stat %r — skipping", stat_name)
@@ -333,6 +347,10 @@ def _log_rollout_eval(
             channel_axis=channel_axis,
             channel_idx=cfg.energy_spectra.channel_idx,
         )
+        spectra_store = zarr.open_group(str(eval_dir / "energy_spectra.zarr"), mode="w")
+        spectra_store.create_array("bin_centers", data=rollout_bins.astype(np.float32))
+        spectra_store.create_array("rollout_spectra", data=rollout_spectra.astype(np.float32))
+        spectra_store.create_array("ref_spectra", data=ref_spectra.astype(np.float32))
         fig = _spectra_figure(rollout_bins, rollout_spectra, ref_spectra)
         run.log({"eval/energy_spectra": wandb.Image(fig)}, step=step)
         plt.close(fig)

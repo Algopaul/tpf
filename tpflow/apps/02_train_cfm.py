@@ -6,11 +6,13 @@ import jax
 import jax.numpy as jnp
 import jax.random as jrd
 import numpy as np
+import zarr
 from flanch import Recorder, get_optimizer
 from flanch.optimizer import get_train_step
 from flax import nnx
 from hdfv.histogram_videos import histogram_frames
 from hdfv.images import frame_rgb, grid_shape
+from hydra.core.hydra_config import HydraConfig
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
@@ -160,6 +162,11 @@ def main(cfg: CFMTraining) -> None:
                 cslist = jnp.linspace(0, 1, cfg.inference.n_param_steps)
                 run_fn = make_flow_fn(model, n_steps=cfg.inference.n_param_steps)
                 out = np.array(run_fn(source_batch, cslist))
+                eval_dir = Path(HydraConfig.get().runtime.output_dir) / f"{epoch + 1}" / "eval"
+                eval_dir.mkdir(parents=True, exist_ok=True)
+                traj_store = zarr.open_group(str(eval_dir / "trajectories.zarr"), mode="w")
+                traj_store.create_array("data", data=out.astype(np.float32), chunks=(1, *out.shape[1:]))
+                traj_store.create_array("conditioning", data=np.array(cslist, dtype=np.float32))
                 if cfg.data.type == "hist":
                     # Histogram video
                     frames = histogram_frames(out)
