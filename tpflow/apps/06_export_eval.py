@@ -40,6 +40,13 @@ def main(cfg: ExportEvalConfig) -> None:
     if not checkpoint_dir.exists():
         raise FileNotFoundError(f"Checkpoint directory not found: {checkpoint_dir}")
 
+    if not (checkpoint_dir / "checkpoint_info.json").exists():
+        from tpflow.model import _find_latest_checkpoint
+        checkpoint_dir = _find_latest_checkpoint(checkpoint_dir)
+        if checkpoint_dir is None:
+            raise FileNotFoundError(f"No checkpoints found under {cfg.checkpoint}")
+        logging.info("Auto-selected latest checkpoint: %s", checkpoint_dir)
+
     with open(checkpoint_dir / "checkpoint_info.json") as f:
         info = json.load(f)
 

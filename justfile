@@ -164,6 +164,16 @@ field-regression ds env:
     opt.learning_rate=1e-4 \
     {{env}}
 
+# Extract zarr eval statistics for the latest kolflow regression checkpoint.
+# run_dir: path to a run dir or specific {run_dir}/{epoch}/ checkpoint.
+# extras: optional Hydra overrides, e.g. "+env=slurm"
+extract-kolflow-stats run_dir extras="":
+  {{export_eval}} --multi checkpoint={{run_dir}} {{extras}}
+
+# Extract zarr eval statistics for the latest hw2d regression checkpoint.
+extract-hw2d-stats run_dir extras="":
+  {{export_eval}} --multi checkpoint={{run_dir}} {{extras}}
+
 # ── kolflow ────────────────────────────────────────────────────────────────────
 kolflow-train-data extras:
   {{py}} ./scripts/datagen/kolmogorov_flow.py --multi \
