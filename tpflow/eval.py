@@ -125,11 +125,13 @@ def run_regression_eval(
     rollout_stats = ref_stats = None
     if cfg.stats:
         if cfg.dataset == "hw2d":
-            rollout_stats = hw2d_statistics(out)
-            ref_stats = hw2d_statistics(ref)
+            all_rollout = hw2d_statistics(out)
+            all_ref = hw2d_statistics(ref)
         else:
-            rollout_stats = trajectory_statistics(out)
-            ref_stats = trajectory_statistics(ref)
+            all_rollout = trajectory_statistics(out)
+            all_ref = trajectory_statistics(ref)
+        rollout_stats = {k: v for k, v in all_rollout.items() if k in cfg.stats}
+        ref_stats = {k: v for k, v in all_ref.items() if k in cfg.stats}
 
     bin_centers = rollout_spectra = ref_spectra = None
     if cfg.log_energy_spectra:
@@ -167,17 +169,16 @@ def export_regression_eval(result: RegressionEvalResult, eval_dir: Path) -> None
     store.create_array("time", data=result.time)
     store.create_array("param", data=result.param)
 
-    if result.rollout_stats is not None:
+    if result.rollout_stats is not None or result.bin_centers is not None:
         stats_store = zarr.open_group(str(eval_dir / "statistics.zarr"), mode="w")
-        for name, vals in result.rollout_stats.items():
-            stats_store.create_array(f"rollout_{name}", data=vals.astype(np.float32))
-            stats_store.create_array(f"ref_{name}", data=result.ref_stats[name].astype(np.float32))
-
-    if result.bin_centers is not None:
-        spectra_store = zarr.open_group(str(eval_dir / "energy_spectra.zarr"), mode="w")
-        spectra_store.create_array("bin_centers", data=result.bin_centers.astype(np.float32))
-        spectra_store.create_array("rollout_spectra", data=result.rollout_spectra.astype(np.float32))
-        spectra_store.create_array("ref_spectra", data=result.ref_spectra.astype(np.float32))
+        if result.rollout_stats is not None:
+            for name, vals in result.rollout_stats.items():
+                stats_store.create_array(f"rollout_{name}", data=vals.astype(np.float32))
+                stats_store.create_array(f"ref_{name}", data=result.ref_stats[name].astype(np.float32))
+        if result.bin_centers is not None:
+            stats_store.create_array("bin_centers", data=result.bin_centers.astype(np.float32))
+            stats_store.create_array("rollout_spectra", data=result.rollout_spectra.astype(np.float32))
+            stats_store.create_array("ref_spectra", data=result.ref_spectra.astype(np.float32))
 
 
 def log_regression_eval(result: RegressionEvalResult, run, cfg, step: int) -> None:
