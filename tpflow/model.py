@@ -167,7 +167,7 @@ def regression_rollout(
     """
 
     _diff_scale = jnp.array(diff_scale)
-    spatial_axes = tuple(range(1, 1 + len(x0.shape) - 1))  # all axes except batch
+    spatial_axes = tuple(range(1, len(x0.shape) - 1))  # spatial axes only, excludes batch and channel
 
     @jax.jit
     def step(x, t_val):
