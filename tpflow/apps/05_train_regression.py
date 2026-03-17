@@ -112,7 +112,7 @@ def main(cfg: RegressionTraining) -> None:
         train_data = RegressionZarrData(cfg.train_data, cfg.batch_size, cfg.block_size)
         diff_scale = train_data.diff_scale
         sample_shape: tuple[int, ...] = train_data._arrays["data"].shape[1:]
-        val_data = get_regression_val_data(cfg.val_data, cfg.batch_size)
+        val_data = get_regression_val_data(cfg.val_data, cfg.batch_size, cfg.val_n_samples)
         logging.info(
             "Data prepared: %d train batches, %d val batches",
             len(train_data),

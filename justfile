@@ -167,6 +167,7 @@ kolflow-physics-regression extras="":
     dataset=kolflow \
     train_data=./data/datasets/kolflow/reg_train_data/physics.zarr \
     val_data=./data/datasets/kolflow/reg_train_data/physics.zarr \
+    val_n_samples=50000 \
     rollout_data=./data/datasets/kolflow/raw_trajectories/test.zarr \
     norm_stats_path=./data/datasets/kolflow/cfm_train_data/train.zarr \
     batch_size=512 \
@@ -247,6 +248,7 @@ kolflow-regression extras:
 hw2d-regression extras:
   just field-regression hw2d \
     "unet.channels_inout=2 \
+     val_n_samples=5000 \
      'stats=[gamma_n,gamma_c,energy,hw2d_enstrophy]' \
      {{extras}}"
 

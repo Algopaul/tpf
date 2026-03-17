@@ -213,13 +213,15 @@ class RegressionZarrData:
                         return
 
 
-def get_regression_val_data(path: str, batch_size: int) -> list[dict]:
-    file = zarr.open(path, mode="r")
+def get_regression_val_data(path: str, batch_size: int, max_samples: int = 0) -> list[dict]:
+    file = cast(zarr.Group, zarr.open(path, mode="r"))
     fields = ("data", "next", "time", "param")
+    n_available = cast(zarr.Array, file["data"]).shape[0]
+    n_load = min(n_available, max_samples) if max_samples > 0 else n_available
     split_data = {}
     n_batches = None
     for field in fields:
-        d = np.array(file[field])
+        d = np.array(cast(zarr.Array, file[field])[:n_load])
         n = len(d) // batch_size
         if n_batches is None:
             n_batches = n

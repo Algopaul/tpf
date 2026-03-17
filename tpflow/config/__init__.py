@@ -69,6 +69,9 @@ class RegressionTraining:
     dataset: str = ""  # dataset name included in wandb run title
     train_data: str = "MISSING"  # path to training regression zarr
     val_data: str = "MISSING"  # path to validation regression zarr
+    # Maximum number of samples loaded from val_data.  0 = load all (fine for small
+    # val sets; dangerous for large ones like physics.zarr which would OOM).
+    val_n_samples: int = 0
     rollout_data: str = "MISSING"  # path to trajectory zarr for rollout eval
     # Path to cfm_train_data/train.zarr; when set, raw rollout_data trajectories
     # are normalised with the stored data_mean/data_std before evaluation.
