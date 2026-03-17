@@ -125,7 +125,7 @@ class CondTrajConfig:
     n_samples: int = 256  # total source noise vectors
     batch_size: int = 256  # samples per forward pass (memory limit)
     seed: int = 0
-    n_cond_steps: int = 32  # number of conditioning values
+    n_cond_steps: int = 0  # 0 = infer from raw_trajectories of cfg.dataset; else explicit
     cond_start: float = 0.0
     cond_end: float = 1.0
     n_ode_steps: int = 128  # RK4 integration steps per sample

@@ -128,7 +128,6 @@ field-cfm-trajectories ds checkpoint modelname env:
     checkpoint={{checkpoint}} \
     dataset={{ds}} \
     n_samples=1000 \
-    n_cond_steps=128 \
     output=data/datasets/{{ds}}/cfm_trajectories/{{modelname}}.zarr \
     {{env}}
 

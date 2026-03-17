@@ -31,6 +31,7 @@ import jax.numpy as jnp
 import jax.random as jrd
 import numpy as np
 import zarr
+from hydra.utils import get_original_cwd
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
@@ -73,10 +74,27 @@ def main(cfg: CondTrajConfig) -> None:
     with init_wandb(cfg, "cond-traj", data_name=cfg.dataset or None):
         info = load_checkpoint_info(checkpoint)
         sample_shape = tuple(info["sample_shape"])
-        cond_values = np.linspace(cfg.cond_start, cfg.cond_end, cfg.n_cond_steps)
+
+        n_cond_steps = cfg.n_cond_steps
+        if n_cond_steps == 0:
+            if not cfg.dataset:
+                raise ValueError("n_cond_steps=0 requires dataset to be set")
+            raw_path = (
+                Path(get_original_cwd())
+                / "data"
+                / "datasets"
+                / cfg.dataset
+                / "raw_trajectories"
+                / "train.zarr"
+            )
+            g = zarr.open(str(raw_path), mode="r")
+            n_cond_steps = g["data"].shape[1]
+            logging.info("Inferred n_cond_steps=%d from %s", n_cond_steps, raw_path)
+
+        cond_values = np.linspace(cfg.cond_start, cfg.cond_end, n_cond_steps)
 
         out = make_output_zarr(
-            cfg.output, cfg.n_cond_steps, cfg.n_samples, sample_shape, cond_values
+            cfg.output, n_cond_steps, cfg.n_samples, sample_shape, cond_values
         )
 
         run_fn = make_flow_fn(model, cfg.n_ode_steps)
