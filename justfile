@@ -141,9 +141,45 @@ field-cfm-trajectories-processed ds env:
   {{process_reg}} --multi \
     input=data/datasets/{{ds}}/raw_trajectories/train.zarr \
     output=data/datasets/{{ds}}/reg_train_data/physics.zarr \
+    norm_stats_path=data/datasets/{{ds}}/cfm_train_data/train.zarr \
     dataset={{ds}} \
     {{reg_process_defaults}} \
     {{env}}
+
+# Process raw kolflow physics trajectories (with normalisation) into regression pairs.
+# Normalisation stats are read from cfm_train_data/train.zarr (produced by step 01).
+kolflow-physics-regression-data extras="":
+  {{process_reg}} --multi \
+    input=data/datasets/kolflow/raw_trajectories/train.zarr \
+    output=data/datasets/kolflow/reg_train_data/physics.zarr \
+    norm_stats_path=data/datasets/kolflow/cfm_train_data/train.zarr \
+    dataset=kolflow \
+    {{reg_process_defaults}} \
+    {{extras}}
+
+# Train a regression model on the normalised kolflow physics trajectories.
+# Requires kolflow-physics-regression-data (or kolflow-cfm-trajectories-processed) to have run first.
+kolflow-physics-regression extras="":
+  {{train_reg}} --multi \
+    model_type=unet \
+    +unet=mid \
+    unet.base_ch=32 \
+    dataset=kolflow \
+    train_data=./data/datasets/kolflow/reg_train_data/physics.zarr \
+    val_data=./data/datasets/kolflow/reg_train_data/physics.zarr \
+    rollout_data=./data/datasets/kolflow/raw_trajectories/test.zarr \
+    norm_stats_path=./data/datasets/kolflow/cfm_train_data/train.zarr \
+    batch_size=512 \
+    block_size=32 \
+    mode=difference \
+    data_type=field \
+    log_energy_spectra=true \
+    energy_spectra.channel_axis=2 \
+    'stats=[enstrophy,first_moment,kurtosis]' \
+    zero_mean_rollout=true \
+    opt.epochs=2_000 \
+    opt.learning_rate=1e-4 \
+    {{extras}}
 
 field-regression ds env:
   {{train_reg}} --multi \

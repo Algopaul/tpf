@@ -115,6 +115,11 @@ class RegressionDataConfig:
     dataset: str = ""  # dataset name included in wandb run title
     block_size: int = 0  # 0 = auto: targets ~2 MB zarr chunks based on state_shape
     trajectory_block_size: int = 0  # 0 = auto: targets ~2 MB input buffer
+    # Optional path to a zarr with normalisation stats (data_mean/data_std or
+    # per_time_mean/per_time_std attrs).  When set, each data block is normalised
+    # before regression pairs are extracted so the output lives in the same
+    # normalised space as CFM-generated trajectories.
+    norm_stats_path: str = ""
     wandb: WandbConfig = field(default_factory=WandbConfig)
 
 

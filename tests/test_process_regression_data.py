@@ -177,6 +177,41 @@ def test_missing_param():
         print("  missing param defaults to ones OK")
 
 
+def test_norm_stats_global():
+    """When norm_stats_path is provided, output data/next should be normalised."""
+    n_traj, n_time = 4, 5
+    state_shape = (3,)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        in_path = str(Path(tmpdir) / "input.zarr")
+        stats_path = str(Path(tmpdir) / "stats.zarr")
+        out_path = str(Path(tmpdir) / "output.zarr")
+
+        data, _, _ = make_input_zarr(in_path, n_traj, n_time, state_shape)
+
+        data_mean = data.mean(axis=(0, 1))
+        data_std = data.std(axis=(0, 1))
+        sg = zarr.open_group(stats_path, mode="w")
+        sg.attrs["data_mean"] = data_mean.tolist()
+        sg.attrs["data_std"] = data_std.tolist()
+
+        _process(in_path, out_path, block_size=100, trajectory_block_size=2,
+                 norm_stats_path=stats_path)
+
+        out = zarr.open_group(out_path, mode="r")
+        out_data = np.array(cast(zarr.Array, out["data"]))
+        out_next = np.array(cast(zarr.Array, out["next"]))
+
+        expected_data = (data[:, :-1] - data_mean) / data_std  # (n_traj, n_steps, *state_shape)
+        expected_data_flat = expected_data.reshape(-1, *state_shape)
+        np.testing.assert_allclose(out_data, expected_data_flat, rtol=1e-5, atol=1e-5)
+
+        expected_next = (data[:, 1:] - data_mean) / data_std
+        expected_next_flat = expected_next.reshape(-1, *state_shape)
+        np.testing.assert_allclose(out_next, expected_next_flat, rtol=1e-5, atol=1e-5)
+        print("  global norm_stats applied correctly")
+
+
 def test_block_boundary():
     """Results must be identical regardless of trajectory_block_size."""
     n_traj, n_time = 9, 5

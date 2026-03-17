@@ -80,11 +80,37 @@ def _make_outfile(
     return outfile
 
 
+def _load_norm_stats(
+    norm_stats_path: str,
+    n_time: int,
+    state_shape: tuple[int, ...],
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """Load normalisation stats from a zarr attrs dict.
+
+    Returns ``(mean_bc, std_bc)`` broadcastable to ``(block, n_time, *state_shape)``,
+    or ``None`` when *norm_stats_path* is empty.
+    Handles both global (data_mean/data_std) and per-time (per_time_mean/per_time_std).
+    """
+    if not norm_stats_path:
+        return None
+    stats = zarr.open(norm_stats_path, mode="r")
+    n_spatial = len(state_shape) - 1
+    if "per_time_mean" in stats.attrs:
+        mean = np.asarray(stats.attrs["per_time_mean"])   # (n_time, C)
+        std  = np.asarray(stats.attrs["per_time_std"])
+        bc_shape = (1, n_time) + (1,) * n_spatial + (state_shape[-1],)
+        return mean.reshape(bc_shape), std.reshape(bc_shape)
+    data_mean = np.asarray(stats.attrs["data_mean"])
+    data_std  = np.asarray(stats.attrs["data_std"])
+    return data_mean, data_std
+
+
 def _process(
     input: str,
     output: str,
     block_size: int,
     trajectory_block_size: int,
+    norm_stats_path: str = "",
 ) -> int:
     infile = cast(zarr.Group, zarr.open(input, mode="r"))
     indata = open_zarr_array(infile, "data")
@@ -119,6 +145,10 @@ def _process(
     else:
         time_vector = np.arange(n_time, dtype=np.float64)
 
+    norm_stats = _load_norm_stats(norm_stats_path, n_time, state_shape)
+    if norm_stats is not None:
+        logging.info("Normalising input data using stats from %s", norm_stats_path)
+
     outfile = _make_outfile(output, n_samples, block_size, state_shape)
 
     sum_diff = np.zeros(state_shape, dtype=np.float64)
@@ -134,6 +164,9 @@ def _process(
         data_block = np.array(
             indata[traj_start:traj_end]
         )  # (block, n_time, *state_shape)
+        if norm_stats is not None:
+            mean_bc, std_bc = norm_stats
+            data_block = (data_block - mean_bc) / std_bc
         param_block = np.array(inparam[traj_start:traj_end])  # (block,)
 
         cur, nxt, time_flat, param_flat = extract_regression_pairs(
@@ -171,6 +204,7 @@ def main(cfg: RegressionDataConfig) -> None:
             cfg.output,
             cfg.block_size,
             cfg.trajectory_block_size,
+            cfg.norm_stats_path,
         )
         logging.info("Saved regression data to %s", cfg.output)
 
