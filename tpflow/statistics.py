@@ -75,8 +75,18 @@ def energy_spectra(
     """Radially-averaged power spectrum of a 2-D field trajectory ensemble.
 
     The state is assumed to be a 2-D periodic field ``(H, W)`` after optional
-    channel selection. The discrete Fourier power ``|F̂|²`` is accumulated into
-    radial wavenumber bins (linear or logarithmic spacing).
+    channel selection. The computation proceeds in three steps:
+
+    1. **FFT**: a 2-D discrete Fourier transform is applied to each field,
+       yielding complex coefficients ``F̂(kx, ky)``. The power per mode is
+       ``|F̂|² / (H·W)²``, normalised by ``(H·W)²`` so that the amplitude is
+       independent of grid size.
+    2. **Radial wavenumber**: each Fourier mode is assigned a scalar wavenumber
+       ``k = √(kx² + ky²)``, collapsing direction information and retaining
+       only scale.
+    3. **Histogram**: the power of all modes that share a similar ``k`` is
+       summed into bins (linear or logarithmic spacing), producing a 1-D
+       spectrum that answers "how much energy lives at scale k?"
 
     Args:
         trajectories: ``(n_time, n_rollout, *state_shape)``
