@@ -21,7 +21,7 @@ import wandb
 from hdfv.histogram_videos import histogram_frames
 from hdfv.images import frame_rgb, grid_shape
 
-from tpflow.model import make_flow_fn, regression_rollout
+from tpflow.model import make_flow_fn, regression_one_step_ahead, regression_rollout
 from tpflow.processing import load_trajectory_zarr
 from tpflow.statistics import energy_spectra, hw2d_statistics, trajectory_statistics
 from tpflow.visualization import angle_color_coded, trace_video
@@ -31,9 +31,37 @@ from tpflow.visualization import angle_color_coded, trace_video
 
 @dataclasses.dataclass
 class CFMEvalResult:
-    data: np.ndarray          # (n_cond_steps, n_samples, *state_shape)  f32
-    conditioning: np.ndarray  # (n_cond_steps,)  f32
-    source: np.ndarray        # (n_samples, *state_shape)  f32
+    data: np.ndarray               # (n_cond_steps, n_samples, *state_shape)  f32
+    conditioning: np.ndarray       # (n_cond_steps,)  f32
+    source: np.ndarray             # (n_samples, *state_shape)  f32
+    reference: np.ndarray | None   # (n_cond_steps, n_samples, *state_shape)  f32, or None
+
+
+def _load_reference(cfg, n_samples: int, conditioning: np.ndarray) -> np.ndarray | None:
+    """Load normalised reference trajectories sampled at the conditioning steps.
+
+    Returns (n_cond_steps, n_samples, *state_shape) float32, or None when the
+    raw trajectory zarr or normalisation stats are not available.
+    """
+    basedir = Path(f"data/datasets/{cfg.data.name}")
+    test_path = basedir / "raw_trajectories" / "test.zarr"
+    stats_path = basedir / "cfm_train_data" / "train.zarr"
+    if not test_path.exists() or not stats_path.exists():
+        return None
+
+    test_zarr = zarr.open(str(test_path), mode="r")
+    n = min(n_samples, test_zarr["data"].shape[0])
+    ref = np.array(test_zarr["data"][:n], dtype=np.float32)  # (n, n_time, *state)
+
+    stats = zarr.open(str(stats_path), mode="r")
+    data_mean = np.asarray(stats.attrs["data_mean"], dtype=np.float32)
+    data_std = np.asarray(stats.attrs["data_std"], dtype=np.float32)
+    ref = (ref - data_mean) / data_std
+
+    # Map each conditioning value to the nearest time index in the trajectory
+    n_time = ref.shape[1]
+    t_idx = np.round(conditioning * (n_time - 1)).astype(int).clip(0, n_time - 1)
+    return np.stack([ref[:, ti] for ti in t_idx], axis=0)  # (n_cond_steps, n, *state)
 
 
 def run_cfm_eval(model, cfg, sample_shape: tuple) -> CFMEvalResult:
@@ -42,10 +70,12 @@ def run_cfm_eval(model, cfg, sample_shape: tuple) -> CFMEvalResult:
     cslist = jnp.linspace(0, 1, cfg.inference.n_param_steps)
     run_fn = make_flow_fn(model, n_steps=cfg.inference.n_param_steps)
     data = np.array(run_fn(source_batch, cslist))
+    reference = _load_reference(cfg, cfg.inference.n_samples, np.array(cslist))
     return CFMEvalResult(
         data=data.astype(np.float32),
         conditioning=np.array(cslist, dtype=np.float32),
         source=np.array(source_batch, dtype=np.float32),
+        reference=reference,
     )
 
 
@@ -61,12 +91,19 @@ def log_cfm_eval(result: CFMEvalResult, run, cfg, step: int) -> None:
     """Log CFM eval videos to wandb."""
     out = result.data
     if cfg.data.type == "hist":
-        frames = histogram_frames(out)
+        # Compute limits once from the full trajectory so all frames share the
+        # same fixed range (2nd/98th percentile → symmetric around zero).
+        absmax = float(np.percentile(np.abs(out), 98))
+        lim = (-absmax, absmax)
+        frames = np.array([f.data for f in histogram_frames(out, xlim=lim, ylim=lim)])
         run.log({"train/cfm_trajectories": wandb.Video(np.transpose(frames, (0, 3, 1, 2)), fps=30, format="mp4")}, step=step)
-        frames = trace_video(out[:, :200, :])
+        frames = trace_video(out[:, :200, :], xlim=lim, ylim=lim)
         run.log({"train/traces": wandb.Video(np.transpose(frames, (0, 3, 1, 2)), fps=20, format="mp4")}, step=step)
-        frames = angle_color_coded(out, result.source)
+        frames = angle_color_coded(out, result.source, xlim=lim, ylim=lim)
         run.log({"train/colorcoded": wandb.Video(np.transpose(frames, (0, 3, 1, 2)), fps=20, format="mp4")}, step=step)
+        if result.reference is not None:
+            ref_frames = np.array([f.data for f in histogram_frames(result.reference, xlim=lim, ylim=lim)])
+            run.log({"train/reference_particles": wandb.Video(np.transpose(ref_frames, (0, 3, 1, 2)), fps=30, format="mp4")}, step=step)
     elif cfg.data.type == "field":
         nrows, ncols = grid_shape(cfg.inference.n_samples)
         frames = [frame_rgb(o, grid=True, nrows=nrows, ncols=ncols, channel=0) for o in out]
@@ -77,10 +114,11 @@ def log_cfm_eval(result: CFMEvalResult, run, cfg, step: int) -> None:
 
 @dataclasses.dataclass
 class RegressionEvalResult:
-    rollout: np.ndarray    # (n_time, n_rollout, *state_shape)  f32
-    reference: np.ndarray  # (n_time, n_rollout, *state_shape)  f32
-    time: np.ndarray       # (n_time,)  f32
-    param: np.ndarray      # (n_rollout,)  f32
+    rollout: np.ndarray           # (n_time, n_rollout, *state_shape)  f32
+    one_step_ahead: np.ndarray    # (n_time, n_rollout, *state_shape)  f32
+    reference: np.ndarray         # (n_time, n_rollout, *state_shape)  f32
+    time: np.ndarray              # (n_time,)  f32
+    param: np.ndarray             # (n_rollout,)  f32
     rollout_stats: dict[str, np.ndarray] | None  # each (n_time, n_rollout)
     ref_stats: dict[str, np.ndarray] | None
     bin_centers: np.ndarray | None      # (n_bins,)
@@ -94,8 +132,10 @@ def run_regression_eval(
     diff_scale: np.ndarray | float,
 ) -> RegressionEvalResult:
     """Run regression rollout and compute all configured statistics."""
-    traj_data, traj_param, _ = load_trajectory_zarr(cfg.rollout_data, n=cfg.n_rollout)
+    traj_data, traj_param, traj_time = load_trajectory_zarr(cfg.rollout_data, n=cfg.n_rollout)
     n_time = traj_data.shape[1]
+    # time_vector: model conditioning values in [cond_start, cond_end] — must match training data
+    # traj_time:   physical time from the rollout dataset — stored in the output zarr for plotting
     time_vector = np.linspace(cfg.cond_start, cfg.cond_end, n_time, dtype=np.float32)
 
     if cfg.norm_stats_path:
@@ -121,6 +161,7 @@ def run_regression_eval(
         zero_mean=cfg.zero_mean_rollout,
     )
     ref = np.moveaxis(traj_data, 0, 1)  # (n_time, n_rollout, *state)
+    osa = regression_one_step_ahead(model, ref, time_vector, param, cfg.mode, diff_scale)
 
     rollout_stats = ref_stats = None
     if cfg.stats:
@@ -148,8 +189,9 @@ def run_regression_eval(
 
     return RegressionEvalResult(
         rollout=out,
+        one_step_ahead=osa,
         reference=ref,
-        time=time_vector,
+        time=traj_time.astype(np.float32),
         param=np.array(traj_param, dtype=np.float32),
         rollout_stats=rollout_stats,
         ref_stats=ref_stats,
@@ -165,6 +207,7 @@ def export_regression_eval(result: RegressionEvalResult, eval_dir: Path) -> None
 
     store = zarr.open_group(str(eval_dir / "rollout.zarr"), mode="w")
     store.create_array("rollout", data=result.rollout.astype(np.float32), chunks=(1, *result.rollout.shape[1:]))
+    store.create_array("one_step_ahead", data=result.one_step_ahead.astype(np.float32), chunks=(1, *result.one_step_ahead.shape[1:]))
     store.create_array("reference", data=result.reference.astype(np.float32), chunks=(1, *result.reference.shape[1:]))
     store.create_array("time", data=result.time)
     store.create_array("param", data=result.param)
@@ -184,12 +227,25 @@ def export_regression_eval(result: RegressionEvalResult, eval_dir: Path) -> None
 def log_regression_eval(result: RegressionEvalResult, run, cfg, step: int) -> None:
     """Log regression eval videos and figures to wandb."""
     if cfg.data_type == "hist":
-        frames = trace_video(result.rollout)
+        absmax = float(np.nanpercentile(np.abs(np.concatenate([result.rollout, result.reference], axis=1)), 98))
+        absmax = absmax if np.isfinite(absmax) and absmax > 0 else 3.0
+        lim = (-absmax, absmax)
+        frames = np.array([f.data for f in histogram_frames(result.rollout, xlim=lim, ylim=lim)])
+        run.log({"eval/histogram": wandb.Video(np.transpose(frames, (0, 3, 1, 2)), fps=30, format="mp4")}, step=step)
+        frames = trace_video(result.rollout, xlim=lim, ylim=lim)
         run.log({"eval/rollout": wandb.Video(np.array(np.transpose(frames, (0, 3, 1, 2))), fps=20, format="mp4")}, step=step)
+        frames = angle_color_coded(result.rollout, result.rollout[0], xlim=lim, ylim=lim)
+        run.log({"eval/colorcoded": wandb.Video(np.transpose(np.array(frames), (0, 3, 1, 2)), fps=20, format="mp4")}, step=step)
+        osa_frames = np.array([f.data for f in histogram_frames(result.one_step_ahead, xlim=lim, ylim=lim)])
+        run.log({"eval/one_step_ahead_histogram": wandb.Video(np.transpose(osa_frames, (0, 3, 1, 2)), fps=30, format="mp4")}, step=step)
+        ref_frames = np.array([f.data for f in histogram_frames(result.reference, xlim=lim, ylim=lim)])
+        run.log({"eval/reference_histogram": wandb.Video(np.transpose(ref_frames, (0, 3, 1, 2)), fps=30, format="mp4")}, step=step)
     elif cfg.data_type == "field":
         nrows, ncols = grid_shape(cfg.n_rollout)
         frames = [frame_rgb(o, grid=True, nrows=nrows, ncols=ncols, channel=0) for o in result.rollout]
         run.log({"eval/rollout": wandb.Video(np.array(np.transpose(frames, (0, 3, 1, 2))), fps=30, format="mp4")}, step=step)
+        osa_frames = [frame_rgb(o, grid=True, nrows=nrows, ncols=ncols, channel=0) for o in result.one_step_ahead]
+        run.log({"eval/one_step_ahead": wandb.Video(np.array(np.transpose(osa_frames, (0, 3, 1, 2))), fps=30, format="mp4")}, step=step)
 
     if result.rollout_stats is not None:
         for stat_name in cfg.stats:

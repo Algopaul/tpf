@@ -1,5 +1,6 @@
 import io
 import json
+import logging
 import os
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import cast
@@ -82,7 +83,9 @@ def _prefetch_shards(
         return {f: np.array(arrays[f][start:end]) for f in fields}  # pyright: ignore[reportArgumentType]
 
     with ThreadPoolExecutor(max_workers=1) as pool:
-        future: Future[dict[str, np.ndarray]] | None = pool.submit(_load, int(shard_order[0]))
+        future: Future[dict[str, np.ndarray]] | None = pool.submit(
+            _load, int(shard_order[0])
+        )
         for i, shard_idx in enumerate(shard_order):
             shard = future.result()
             # Kick off next load before yielding, so I/O overlaps with training
@@ -116,6 +119,9 @@ class ZarrData:
         n_samples = first.shape[0]
         shard_shape = first.shards
         shard_size = shard_shape[0] if shard_shape is not None else n_samples
+        # When the dataset is smaller than the configured shard target (common
+        # for small datasets), treat the whole dataset as a single shard.
+        shard_size = min(shard_size, n_samples)
         assert shard_size % cfg.block_size == 0, (
             f"shard_size {shard_size} must be divisible by block_size {cfg.block_size}"
         )
@@ -162,14 +168,11 @@ class RegressionZarrData:
     _FIELDS = ("data", "next", "time", "param")
 
     def __init__(self, path: str, batch_size: int, block_size: int):
-        assert batch_size % block_size == 0
         group = cast(zarr.Group, zarr.open(path, mode="r"))
         self.diff_scale: np.ndarray = np.array(
             group.attrs.get("diff_scale", 1.0), dtype=np.float32
         )
-        self._block_size = block_size
         self._batch_size = batch_size
-        self._blocks_per_batch = batch_size // block_size
 
         self._arrays: dict[str, zarr.Array] = {
             f: cast(zarr.Array, group[f]) for f in self._FIELDS
@@ -178,9 +181,17 @@ class RegressionZarrData:
         n_samples = first.shape[0]
         shard_shape = first.shards
         shard_size = shard_shape[0] if shard_shape is not None else n_samples
-        assert shard_size % block_size == 0, (
-            f"shard_size {shard_size} must be divisible by block_size {block_size}"
-        )
+        shard_size = min(shard_size, n_samples)
+        if shard_size % block_size != 0:
+            adjusted = max(d for d in range(1, block_size + 1) if shard_size % d == 0)
+            logging.warning(
+                "block_size %d does not divide shard_size %d; adjusting to %d",
+                block_size,
+                shard_size,
+                adjusted,
+            )
+            block_size = adjusted
+        self._block_size = block_size
         self._shard_size = shard_size
         self._n_shards = n_samples // shard_size
         self._blocks_per_shard = shard_size // block_size
@@ -192,28 +203,36 @@ class RegressionZarrData:
     def iter_batches(self, seed=None):
         rng = np.random.default_rng(seed)
         shard_order = rng.permutation(self._n_shards)
-        block_buffer: dict[str, list] = {f: [] for f in self._FIELDS}
-        n_buffered = 0
+        buf: dict[str, list[np.ndarray]] = {f: [] for f in self._FIELDS}
+        buf_n = 0
         batches_yielded = 0
 
         for shard in _prefetch_shards(self._arrays, shard_order, self._shard_size):
             for b in rng.permutation(self._blocks_per_shard):
-                bs, be = int(b) * self._block_size, (int(b) + 1) * self._block_size
+                bs = int(b) * self._block_size
+                be = bs + self._block_size
                 for f in self._FIELDS:
-                    block_buffer[f].append(shard[f][bs:be])
-                n_buffered += 1
-                if n_buffered == self._blocks_per_batch:
-                    yield {
-                        f: np.concatenate(block_buffer[f], axis=0) for f in self._FIELDS
-                    }
-                    block_buffer = {f: [] for f in self._FIELDS}
-                    n_buffered = 0
+                    buf[f].append(shard[f][bs:be])
+                buf_n += self._block_size
+
+                while buf_n >= self._batch_size:
+                    cat = {f: np.concatenate(buf[f], axis=0) for f in self._FIELDS}
+                    yield {f: cat[f][: self._batch_size] for f in self._FIELDS}
+                    remainder = cat["data"][self._batch_size :]
+                    if len(remainder) > 0:
+                        buf = {f: [cat[f][self._batch_size :]] for f in self._FIELDS}
+                        buf_n = len(remainder)
+                    else:
+                        buf = {f: [] for f in self._FIELDS}
+                        buf_n = 0
                     batches_yielded += 1
                     if batches_yielded >= self._n_batches:
                         return
 
 
-def get_regression_val_data(path: str, batch_size: int, max_samples: int = 0) -> list[dict]:
+def get_regression_val_data(
+    path: str, batch_size: int, max_samples: int = 0
+) -> list[dict]:
     file = cast(zarr.Group, zarr.open(path, mode="r"))
     fields = ("data", "next", "time", "param")
     n_available = cast(zarr.Array, file["data"]).shape[0]

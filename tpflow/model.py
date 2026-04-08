@@ -168,9 +168,13 @@ def regression_rollout(
 
     _diff_scale = jnp.array(diff_scale)
     spatial_axes = tuple(range(1, len(x0.shape) - 1))  # spatial axes only, excludes batch and channel
+    # For particle data (state_shape=(d,)) spatial_axes is empty; zero_mean would
+    # subtract the whole array from itself giving zeros. Disable silently.
+    if not spatial_axes:
+        zero_mean = False
 
-    @jax.jit
-    def step(x, t_val):
+    @nnx.jit
+    def step(model, x, t_val):
         t = jnp.full((x.shape[0], 1), t_val, dtype=jnp.float32)
         pred = model(x, t, param.astype(jnp.float32)).astype(jnp.float32)
         if mode == "difference":
@@ -186,9 +190,52 @@ def regression_rollout(
     x = x0.astype(jnp.float32)
     outs[0] = np.array(x)
     for t_idx in tqdm(range(n_time - 1), desc="Rollout"):
-        x = step(x, float(time_vector[t_idx]))
+        x = step(model, x, float(time_vector[t_idx]))
         jax.block_until_ready(x)
         outs[t_idx + 1] = np.array(x)
+    return outs
+
+
+def regression_one_step_ahead(
+    model, reference, time_vector, param, mode: str,
+    diff_scale: np.ndarray | float = 1.0,
+):
+    """Teacher-forced one-step-ahead evaluation.
+
+    At each time step t the model predicts x_{t+1} from the TRUE x_t (not the
+    model's own previous prediction).  The output array has the same shape as
+    the autoregressive rollout so the two can be compared directly.
+
+    Args:
+      model:       RegressionDec (or compatible)
+      reference:   (n_time, n_rollout, *state_shape) — true states
+      time_vector: (n_time,) — conditioning-time values
+      param:       (n_rollout, 1) — per-trajectory params
+      mode:        'step' or 'difference'
+      diff_scale:  std(x_next - x) from training data
+
+    Returns:
+      numpy array of shape (n_time, n_rollout, *state_shape)
+      where out[0] = reference[0] and out[t+1] = model(reference[t], t)
+    """
+    _diff_scale = jnp.array(diff_scale)
+
+    @nnx.jit
+    def step(model, x, t_val):
+        t = jnp.full((x.shape[0], 1), t_val, dtype=jnp.float32)
+        pred = model(x, t, param.astype(jnp.float32)).astype(jnp.float32)
+        if mode == "difference":
+            return x + _diff_scale * pred
+        return pred
+
+    n_time = reference.shape[0]
+    outs = np.zeros_like(reference)
+    outs[0] = reference[0]
+    for t_idx in tqdm(range(n_time - 1), desc="1-step ahead"):
+        x_true = jnp.array(reference[t_idx].astype(np.float32))
+        x_next = step(model, x_true, float(time_vector[t_idx]))
+        jax.block_until_ready(x_next)
+        outs[t_idx + 1] = np.array(x_next)
     return outs
 
 
@@ -289,6 +336,7 @@ def store_regression_model(
         "sample_shape": list(sample_shape),
         "epoch": epoch,
         "data_name": _dataset_name_from_path(cfg.train_data),
+        "train_data": cfg.train_data,
     }
     if diff_scale is not None:
         info["diff_scale"] = diff_scale if isinstance(diff_scale, float) else np.asarray(diff_scale).tolist()

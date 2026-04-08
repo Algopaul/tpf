@@ -145,6 +145,14 @@ def _process(
     else:
         time_vector = np.arange(n_time, dtype=np.float64)
 
+    # Normalize to [0, 1] so the stored time conditioning is always in a
+    # consistent range, regardless of whether the input used raw physical time
+    # (e.g. [0,1,...,127]) or a CFM conditioning sweep (already [0,...,1]).
+    # The rollout in run_regression_eval uses linspace(cond_start, cond_end,
+    # n_time) which defaults to [0, 1], so training and rollout must agree.
+    if time_vector[-1] > 0:
+        time_vector = time_vector / time_vector[-1]
+
     norm_stats = _load_norm_stats(norm_stats_path, n_time, state_shape)
     if norm_stats is not None:
         logging.info("Normalising input data using stats from %s", norm_stats_path)
