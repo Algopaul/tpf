@@ -140,13 +140,13 @@ def make_outfile(name, n_samples, block_size, sample_shape):
     # Shard whenever n_samples > block_size (i.e. more than one inner chunk).
     # Small test splits produce one shard file; unit-test arrays (n_samples ≤
     # block_size) skip sharding entirely to avoid codec overhead.
-    n_bps = auto_blocks_per_shard(block_size, sample_shape, dtype_itemsize=8)
+    n_bps = auto_blocks_per_shard(block_size, sample_shape, dtype_itemsize=4)
     shard_size = n_bps * block_size
     use_shards = n_samples > block_size
     logging.info(
         "shard_size=%d samples (%.1f GB)%s",
         shard_size,
-        shard_size * max(1, math.prod(sample_shape)) * 8 / 1024**3,
+        shard_size * max(1, math.prod(sample_shape)) * 4 / 1024**3,
         "" if use_shards else " — skipped, dataset fits in one shard",
     )
 
@@ -161,7 +161,7 @@ def make_outfile(name, n_samples, block_size, sample_shape):
         arrays["param"]["shards"] = (shard_size,)
 
     for array_name, config in arrays.items():
-        outfile.create_array(array_name, dtype="f8", **config)
+        outfile.create_array(array_name, dtype="f4", **config)
 
     return outfile
 

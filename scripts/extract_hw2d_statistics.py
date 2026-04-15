@@ -15,6 +15,7 @@ Output:
     data/datasets/hw2d/stats/plots/hw2d_statistics_comparison.png
 """
 from __future__ import annotations
+from tqdm import tqdm
 
 import argparse
 import sys
@@ -76,7 +77,7 @@ def compute_stats_batched(
 
     all_stats: dict[str, list[np.ndarray]] = {}
 
-    for start in range(0, N, batch_size):
+    for start in tqdm(range(0, N, batch_size)):
         end = min(start + batch_size, N)
         chunk = zarr_data[start:end].astype(np.float32)  # (B, n_time, H, W, C)
 

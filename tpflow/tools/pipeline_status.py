@@ -66,6 +66,13 @@ _RECIPES: dict[str, dict[str, Optional[str]]] = {
         "cfm_trajectories_processed": None,
         "regression": None,
     },
+    "pyqg": {
+        "process": "pyqg-processed",
+        "train_cfm": "pyqg-cfm",
+        "cfm_trajectories": "pyqg-cfm-trajectories",
+        "cfm_trajectories_processed": "pyqg-cfm-trajectories-processed",
+        "regression": "pyqg-regression",
+    },
 }
 
 # Per-variant regression recipes: variant stem → just recipe name.
@@ -82,6 +89,10 @@ _REGRESSION_RECIPES: dict[str, dict[str, str]] = {
     },
     "hw2d": {
         "model1":  "hw2d-regression",
+    },
+    "pyqg": {
+        "model1":  "pyqg-regression",
+        "physics": "pyqg-physics-regression",
     },
     "holder": {
         "model1":  "holder-regression",
@@ -129,7 +140,7 @@ def _data_variant(train_data: str) -> str:
 
 def _find_checkpoints(outputs_dir: Path, dataset: str, regression: bool) -> list[dict]:
     results = []
-    for info_file in outputs_dir.rglob("checkpoint_info.json"):
+    for info_file in outputs_dir.glob("*/*/*/*/checkpoint_info.json"):
         try:
             info = json.loads(info_file.read_text())
         except Exception:

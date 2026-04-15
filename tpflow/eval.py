@@ -138,15 +138,17 @@ def run_regression_eval(
     # traj_time:   physical time from the rollout dataset — stored in the output zarr for plotting
     time_vector = np.linspace(cfg.cond_start, cfg.cond_end, n_time, dtype=np.float32)
 
+    norm_per_time_mean: np.ndarray | None = None
+    norm_per_time_std: np.ndarray | None = None
     if cfg.norm_stats_path:
         stats = zarr.open(cfg.norm_stats_path, mode="r")
         if "per_time_mean" in stats.attrs:
-            per_time_mean = np.asarray(stats.attrs["per_time_mean"])
-            per_time_std = np.asarray(stats.attrs["per_time_std"])
+            norm_per_time_mean = np.asarray(stats.attrs["per_time_mean"])
+            norm_per_time_std = np.asarray(stats.attrs["per_time_std"])
             state_shape = traj_data.shape[2:]
             n_spatial = len(state_shape) - 1
             bc_shape = (1, n_time) + (1,) * n_spatial + (state_shape[-1],)
-            traj_data = (traj_data - per_time_mean.reshape(bc_shape)) / per_time_std.reshape(bc_shape)
+            traj_data = (traj_data - norm_per_time_mean.reshape(bc_shape)) / norm_per_time_std.reshape(bc_shape)
         else:
             data_mean = np.asarray(stats.attrs["data_mean"])
             data_std = np.asarray(stats.attrs["data_std"])
@@ -166,8 +168,17 @@ def run_regression_eval(
     rollout_stats = ref_stats = None
     if cfg.stats:
         if cfg.dataset == "hw2d":
-            all_rollout = hw2d_statistics(out)
-            all_ref = hw2d_statistics(ref)
+            # hw2d statistics require physical-unit fields — unnormalise before computing
+            if norm_per_time_mean is not None:
+                state_shape = out.shape[2:]
+                n_spatial = len(state_shape) - 1
+                bc_shape = (n_time, 1) + (1,) * n_spatial + (state_shape[-1],)
+                out_phys = out * norm_per_time_std.reshape(bc_shape) + norm_per_time_mean.reshape(bc_shape)
+                ref_phys = ref * norm_per_time_std.reshape(bc_shape) + norm_per_time_mean.reshape(bc_shape)
+            else:
+                out_phys, ref_phys = out, ref
+            all_rollout = hw2d_statistics(out_phys)
+            all_ref = hw2d_statistics(ref_phys)
         else:
             all_rollout = trajectory_statistics(out)
             all_ref = trajectory_statistics(ref)
