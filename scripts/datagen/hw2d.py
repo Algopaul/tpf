@@ -52,7 +52,7 @@ class HW2DConfig:
     seed: int = 0
     split: str = "train"
     n_seeds: int = 1000  # total seeds; used to pre-allocate zarr shape
-    time_stride: int = 20  # keep every N-th snapshot (401 out of 8001)
+    time_stride: int = 10  # keep every N-th snapshot (801 out of 8001)
 
     # ── output ─────────────────────────────────────────────────────────────
     output_dir: str = "data/datasets/hw2d/raw_trajectories"

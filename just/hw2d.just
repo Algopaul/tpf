@@ -2,7 +2,7 @@
 # Step 0: generate raw trajectories (density + phi) on the cluster.
 # Each seed is one SLURM job via Hydra submitit.  Use +env=torchcpu for CPU nodes.
 hw2d-gen-train extras:
-  {{py}} ./scripts/datagen/hw2d.py --multi seed=range\(0,1000\) split=train {{extras}}
+  {{py}} ./scripts/datagen/hw2d.py --multi seed=range\(0,2000\) n_seeds=2000 split=train {{extras}}
 
 hw2d-gen-test extras:
   {{py}} ./scripts/datagen/hw2d.py --multi seed=range\(0,100\) split=test n_seeds=100 {{extras}}
@@ -13,6 +13,11 @@ hw2d-data extras:
 
 hw2d-cfm extras:
   {{train_cfm}} {{field_cfm_defaults}} data.name=hw2d unet.base_ch=32,64 unet.channels_inout=2 {{extras}}
+
+# Step 3: generate CFM conditioning trajectories for hw2d.
+# n_cond_steps=801 matches time_stride=10 raw trajectories (801 out of 8001 snapshots).
+hw2d-cfm-trajectories checkpoint modelname env:
+  just field-cfm-trajectories hw2d {{checkpoint}} {{modelname}} "n_cond_steps=801 {{env}}"
 
 hw2d-regression extras:
   just field-regression hw2d \

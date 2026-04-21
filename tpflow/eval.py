@@ -299,21 +299,82 @@ def _spectra_figure(
     bin_centers: np.ndarray,
     rollout_spectra: np.ndarray,
     ref_spectra: np.ndarray,
+    n_chunks: int = 3,
+    mid_freq_frac: tuple[float, float] = (0.2, 0.7),
 ):
-    """Mean ± std energy spectrum comparison plot."""
-    r = np.mean(rollout_spectra, axis=0)
-    f = np.mean(ref_spectra, axis=0)
-    rm, rs = np.mean(r, axis=0), np.std(r, axis=0)
-    fm, fs = np.mean(f, axis=0), np.std(f, axis=0)
-    fig, ax = plt.subplots(figsize=(6, 3))
-    ax.fill_between(bin_centers, rm - rs, rm + rs, alpha=0.25, color="tab:blue")
-    ax.plot(bin_centers, rm, color="tab:blue", label="rollout")
-    ax.fill_between(bin_centers, fm - fs, fm + fs, alpha=0.25, color="tab:orange")
-    ax.plot(bin_centers, fm, color="tab:orange", linestyle="--", label="reference")
+    """Log-log energy spectrum comparison, split into time chunks.
+
+    ``n_chunks`` equal slices of the time axis are each shown as a separate
+    colour.  Rollout curves are solid; reference curves are dashed.  A
+    spectral slope *α* is estimated by least-squares fit of
+    ``log E ~ α log k`` over the mid-frequency band and appended to each
+    legend label.  The fitting band is shaded in gray.
+
+    Args:
+        bin_centers: ``(n_bins,)`` wavenumber bin centres.
+        rollout_spectra: ``(n_time, n_rollout, n_bins)``.
+        ref_spectra: ``(n_time, n_rollout, n_bins)``.
+        n_chunks: number of equal time intervals to display.
+        mid_freq_frac: ``(lo, hi)`` fractions of the log-wavenumber range
+            used for slope fitting.
+    """
+    n_time = rollout_spectra.shape[0]
+
+    # ── time-chunk boundaries ─────────────────────────────────────────────────
+    starts = [i * n_time // n_chunks for i in range(n_chunks)]
+    ends = [(i + 1) * n_time // n_chunks for i in range(n_chunks)]
+    pct_labels = [
+        f"{100 * s // n_time}–{100 * e // n_time}%"
+        for s, e in zip(starts, ends)
+    ]
+    colors = plt.cm.viridis(np.linspace(0.1, 0.9, n_chunks))
+
+    # ── mid-frequency mask for slope fitting ──────────────────────────────────
+    valid = bin_centers > 0
+    log_k_all = np.where(valid, np.log10(np.where(valid, bin_centers, 1.0)), np.nan)
+    log_k_valid = log_k_all[valid]
+    if log_k_valid.size >= 4:
+        lk_lo = log_k_valid.min() + mid_freq_frac[0] * (log_k_valid.max() - log_k_valid.min())
+        lk_hi = log_k_valid.min() + mid_freq_frac[1] * (log_k_valid.max() - log_k_valid.min())
+        slope_mask = valid & (log_k_all >= lk_lo) & (log_k_all <= lk_hi)
+    else:
+        slope_mask = valid
+
+    def _fit_slope(k: np.ndarray, e: np.ndarray, mask: np.ndarray) -> float | None:
+        km, em = k[mask], e[mask]
+        pos = em > 0
+        km, em = km[pos], em[pos]
+        if km.size < 3:
+            return None
+        return float(np.polyfit(np.log10(km), np.log10(em), 1)[0])
+
+    # ── figure ────────────────────────────────────────────────────────────────
+    fig, ax = plt.subplots(figsize=(7, 4))
+
+    for s, e, pct, color in zip(starts, ends, pct_labels, colors):
+        # mean over time-chunk steps, then over rollouts → (n_bins,)
+        rm = np.mean(np.mean(rollout_spectra[s:e], axis=0), axis=0)
+        fm = np.mean(np.mean(ref_spectra[s:e], axis=0), axis=0)
+
+        r_slope = _fit_slope(bin_centers, rm, slope_mask)
+        f_slope = _fit_slope(bin_centers, fm, slope_mask)
+
+        r_suffix = f" (α={r_slope:.2f})" if r_slope is not None else ""
+        f_suffix = f" (α={f_slope:.2f})" if f_slope is not None else ""
+
+        ax.plot(bin_centers, rm, color=color, label=f"rollout {pct}{r_suffix}")
+        ax.plot(bin_centers, fm, color=color, linestyle="--", label=f"ref {pct}{f_suffix}")
+
+    # shade slope-fitting band
+    k_fit = bin_centers[slope_mask]
+    if k_fit.size >= 2:
+        ax.axvspan(k_fit[0], k_fit[-1], alpha=0.08, color="gray", label="fit range")
+
+    ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.set_xlabel("wavenumber")
-    ax.set_ylabel("power")
+    ax.set_xlabel("wavenumber k")
+    ax.set_ylabel("power E(k)")
     ax.set_title("energy spectra")
-    ax.legend()
+    ax.legend(fontsize=7, ncol=2, loc="lower left")
     fig.tight_layout()
     return fig

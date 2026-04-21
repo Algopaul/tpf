@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 from pathlib import Path
 import typer
 from rich.console import Console
@@ -38,7 +39,7 @@ STEP_LABELS = {
 def _find_checkpoint_dirs(outputs_dir: Path, dataset: str, regression: bool) -> list[Path]:
     """Return epoch-level checkpoint directories for *dataset* in *outputs_dir*."""
     results = []
-    for info_file in outputs_dir.rglob("checkpoint_info.json"):
+    for info_file in outputs_dir.glob("*/*/*/*/checkpoint_info.json"):
         try:
             info = json.loads(info_file.read_text())
         except Exception:
@@ -78,13 +79,24 @@ def _artifacts(
     return results
 
 
-def _fmt_size(path: Path) -> str:
-    total = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
-    if total >= 1 << 30:
-        return f"{total / (1 << 30):.1f} GB"
-    if total >= 1 << 20:
-        return f"{total / (1 << 20):.1f} MB"
-    return f"{total / (1 << 10):.1f} KB"
+def _batch_sizes(paths: list[Path]) -> dict[Path, str]:
+    """Return a size string for each path using a single du -sh call."""
+    existing = [p for p in paths if p.exists()]
+    if not existing:
+        return {}
+    try:
+        result = subprocess.run(
+            ["du", "-sh", *map(str, existing)],
+            capture_output=True, text=True, timeout=30,
+        )
+        sizes = {}
+        for line in result.stdout.splitlines():
+            parts = line.split("\t", 1)
+            if len(parts) == 2:
+                sizes[Path(parts[1])] = parts[0]
+        return sizes
+    except Exception:
+        return {}
 
 
 @app.command()
@@ -111,8 +123,9 @@ def main(
     table.add_column("Path")
     table.add_column("Size", justify="right")
 
+    sizes = _batch_sizes([path for _, path, _ in artifacts])
     for stage_label, path, _ in artifacts:
-        size = _fmt_size(path) if path.exists() else "—"
+        size = sizes.get(path, "—") if path.exists() else "—"
         table.add_row(stage_label, str(path), size)
 
     console.print(table)

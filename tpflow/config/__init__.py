@@ -52,8 +52,8 @@ class InferenceConfig:
 
 @dataclass
 class EnergySpectraConfig:
-    n_bins: int = 32
-    log_bins: bool = False
+    n_bins: int = 16
+    log_bins: bool = True
     # -1 means the state is already a plain 2-D (H, W) field with no channel axis.
     # Set to 0 (or any valid axis index) when state_shape is (H, W, C) or (C, H, W).
     channel_axis: int = -1

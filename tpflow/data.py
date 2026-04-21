@@ -2,6 +2,7 @@ import io
 import json
 import logging
 import os
+from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import cast
 
@@ -72,25 +73,32 @@ def _prefetch_shards(
     arrays: dict[str, zarr.Array],
     shard_order: np.ndarray,
     shard_size: int,
+    n_prefetch: int = 4,
 ):
-    """Iterate shards, loading the next one in a background thread while the
-    caller processes the current one.  Yields one shard dict per iteration."""
+    """Iterate shards, loading up to n_prefetch ahead in background threads.
+
+    hw2d shards are ~1 GB each on a shared filesystem; single-shard lookahead
+    leaves the GPU idle between shard loads.  n_prefetch=4 keeps ~4 GB of
+    concurrent I/O in flight, hiding the latency on slow filesystems.
+    """
     fields = list(arrays.keys())
+    n_shards = len(shard_order)
 
     def _load(idx: int) -> dict[str, np.ndarray]:
         start = idx * shard_size
         end = start + shard_size
         return {f: np.array(arrays[f][start:end]) for f in fields}  # pyright: ignore[reportArgumentType]
 
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        future: Future[dict[str, np.ndarray]] | None = pool.submit(
-            _load, int(shard_order[0])
-        )
-        for i, shard_idx in enumerate(shard_order):
-            shard = future.result()
-            # Kick off next load before yielding, so I/O overlaps with training
-            if i + 1 < len(shard_order):
-                future = pool.submit(_load, int(shard_order[i + 1]))
+    with ThreadPoolExecutor(max_workers=n_prefetch) as pool:
+        futures: deque[Future[dict[str, np.ndarray]]] = deque()
+        # Seed the pipeline with the first n_prefetch shards.
+        for j in range(min(n_prefetch, n_shards)):
+            futures.append(pool.submit(_load, int(shard_order[j])))
+        for i in range(n_shards):
+            shard = futures.popleft().result()
+            next_idx = i + n_prefetch
+            if next_idx < n_shards:
+                futures.append(pool.submit(_load, int(shard_order[next_idx])))
             yield shard  # type: ignore[misc]
 
 
